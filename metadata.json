@@ -1,0 +1,6 @@
+{
+  "name": "EtherNode - Ethereum Node Operations & Explorer",
+  "description": "Production Ethereum node console, live JSON-RPC telemetry, client sync monitor, block inspector, and node runner config architect.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
