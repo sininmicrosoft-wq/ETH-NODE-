@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { EthereumBlock, NodeMetrics, TelemetryLatencyLog } from '../types/ethereum';
 import { GlobalPropagationMap } from './GlobalPropagationMap';
 import {
@@ -32,6 +32,12 @@ import {
   Timer,
   AlertTriangle,
   Flame,
+  Coins,
+  Wallet,
+  Calculator,
+  Sparkles,
+  Percent,
+  Sliders,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -85,6 +91,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const [peerClientFilter, setPeerClientFilter] = useState<string>('all');
   const [showPeerLogStream, setShowPeerLogStream] = useState<boolean>(false);
   const [showLogsDrawer, setShowLogsDrawer] = useState<boolean>(false);
+  const [validatorCount, setValidatorCount] = useState<number>(1);
+  const [enableMevBoost, setEnableMevBoost] = useState<boolean>(true);
+  const [incomeTimeframe, setIncomeTimeframe] = useState<'daily' | 'monthly' | 'annual'>('daily');
 
   const currentBlock = recentBlocks[0] || null;
   const latestBlockNum = currentBlock ? hexToNumber(currentBlock.number) : (metrics?.blockNumber || 0);
@@ -217,6 +226,105 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const ethBurnRateAnnualized = ethBurnRatePerHour * 24 * 365.25;
   const ethUsdPrice = 2650; // Reference ETH price
   const totalEthBurnedUsd = totalEthBurned20 * ethUsdPrice;
+
+  // Validator Daily Income & Staking Economics Calculation
+  // Derived dynamically from current average baseFee, gas usage, and typical block rewards across recentBlocks
+  const validatorEconomics = useMemo(() => {
+    // 1. Average BaseFee across recent blocks (in Gwei)
+    const validBaseFeeBlocks = recentBlocks.filter((b) => b.baseFeePerGas);
+    const avgBaseFeeGwei = validBaseFeeBlocks.length > 0
+      ? validBaseFeeBlocks.reduce((acc, b) => acc + (hexToNumber(b.baseFeePerGas!) / 1e9), 0) / validBaseFeeBlocks.length
+      : (currentBaseFee || 15.0);
+
+    // 2. Average Gas Used per block
+    const avgGasUsed = recentBlocks.length > 0
+      ? recentBlocks.reduce((acc, b) => acc + (b.gasUsed ? hexToNumber(b.gasUsed) : 14_200_000), 0) / recentBlocks.length
+      : 14_200_000;
+
+    // 3. Execution Layer (EL) Priority Tips (Gwei per gas)
+    // Dynamic rule: Under higher baseFee, priority fees rise as transactors bid for priority inclusion
+    const estimatedPriorityTipGwei = Math.max(1.0, Number((avgBaseFeeGwei * 0.08).toFixed(2))); // ~8% of base fee or min 1.0 Gwei
+    const priorityTipsPerBlockEth = (avgGasUsed * estimatedPriorityTipGwei * 1e9) / 1e18;
+
+    // 4. MEV Boost Bid / Flashbots relay tip per block
+    // MEV extracted scales with network volatility and higher base fee
+    const mevBoostPerBlockEth = enableMevBoost
+      ? Math.max(0.025, 0.025 + (avgBaseFeeGwei * 0.0015))
+      : 0;
+
+    // 5. Total Expected Proposer Execution Layer (EL) Reward per block proposed
+    const typicalBlockRewardEth = priorityTipsPerBlockEth + mevBoostPerBlockEth;
+
+    // 6. Network parameters (Ethereum PoS Mainnet baseline)
+    const activeNetworkValidators = 1_048_576; // ~1.05M validators on Ethereum
+    const slotsPerDay = 7_200; // 86400 / 12
+    const dailyProposalProbability = slotsPerDay / activeNetworkValidators; // ~0.006866 (1 proposal every ~145.6 days per validator)
+    const daysBetweenProposals = Math.round(1 / dailyProposalProbability);
+
+    // 7. Consensus Layer (CL) Attestation Issuance
+    // Staking issuance APR is ~2.8% to 3.0% on 32 ETH
+    const clBaseApr = 0.029;
+    const dailyClRewardPerValidatorEth = (32 * clBaseApr) / 365.25; // ~0.002540 ETH/day
+
+    // 8. Expected Execution Layer (EL) reward per validator per day
+    const expectedDailyElRewardPerValidatorEth = dailyProposalProbability * typicalBlockRewardEth;
+
+    // 9. Total Daily Rewards for single validator
+    const totalDailyPerValidatorEth = dailyClRewardPerValidatorEth + expectedDailyElRewardPerValidatorEth;
+
+    // 10. Multi-validator totals
+    const effectiveValidatorCount = Math.max(1, validatorCount);
+    const totalStakedEth = effectiveValidatorCount * 32;
+
+    const dailyIncomeEth = totalDailyPerValidatorEth * effectiveValidatorCount;
+    const dailyIncomeUsd = dailyIncomeEth * ethUsdPrice;
+
+    const monthlyIncomeEth = dailyIncomeEth * 30;
+    const monthlyIncomeUsd = dailyIncomeUsd * 30;
+
+    const annualIncomeEth = dailyIncomeEth * 365.25;
+    const annualIncomeUsd = dailyIncomeUsd * 365.25;
+
+    const annualClEth = dailyClRewardPerValidatorEth * effectiveValidatorCount * 365.25;
+    const annualElEth = expectedDailyElRewardPerValidatorEth * effectiveValidatorCount * 365.25;
+
+    const effectiveStakingApr = (annualIncomeEth / totalStakedEth) * 100;
+    const clPortionPercent = Math.round((dailyClRewardPerValidatorEth / totalDailyPerValidatorEth) * 100);
+    const elPortionPercent = 100 - clPortionPercent;
+
+    // Expected annual block proposals for this validator setup
+    const expectedAnnualProposals = (dailyProposalProbability * 365.25 * effectiveValidatorCount).toFixed(1);
+
+    return {
+      avgBaseFeeGwei,
+      avgGasUsed,
+      estimatedPriorityTipGwei,
+      priorityTipsPerBlockEth,
+      mevBoostPerBlockEth,
+      typicalBlockRewardEth,
+      activeNetworkValidators,
+      slotsPerDay,
+      dailyProposalProbability,
+      daysBetweenProposals,
+      dailyClRewardPerValidatorEth,
+      expectedDailyElRewardPerValidatorEth,
+      totalDailyPerValidatorEth,
+      effectiveValidatorCount,
+      totalStakedEth,
+      dailyIncomeEth,
+      dailyIncomeUsd,
+      monthlyIncomeEth,
+      monthlyIncomeUsd,
+      annualIncomeEth,
+      annualIncomeUsd,
+      annualClEth,
+      annualElEth,
+      effectiveStakingApr,
+      clPortionPercent,
+      elPortionPercent,
+      expectedAnnualProposals,
+    };
+  }, [recentBlocks, currentBaseFee, enableMevBoost, validatorCount, ethUsdPrice]);
 
   const getGasColor = (percent: number) => {
     if (percent >= 75) {
@@ -1573,6 +1681,272 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
           <div className="text-[11px] text-slate-500 font-mono">
             Click any block to inspect full receipt & transactions
+          </div>
+        </div>
+      </div>
+
+      {/* Estimated Daily Validator Income & Staking Economics Estimator */}
+      <div className="p-5 bg-gradient-to-r from-slate-900/80 via-emerald-950/20 to-slate-900/80 rounded-xl border border-emerald-500/30 relative overflow-hidden space-y-4">
+        {/* Ambient emerald glow background */}
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Card Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+              <Coins className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-white">
+                  Estimated Daily Validator Income & Staking Yield
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase font-semibold">
+                  Live History Model
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Calculates daily rewards combining Consensus Layer attestation issuance and Execution Layer block proposer rewards (priority fees + MEV) derived from rolling block base fees.
+              </p>
+            </div>
+          </div>
+
+          {/* Timeframe Switcher */}
+          <div className="flex items-center p-0.5 bg-slate-950 rounded-lg border border-slate-800 text-xs font-medium">
+            <button
+              onClick={() => setIncomeTimeframe('daily')}
+              className={`px-2.5 py-1 rounded transition-colors ${
+                incomeTimeframe === 'daily'
+                  ? 'bg-slate-800 text-emerald-400 font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Daily
+            </button>
+            <button
+              onClick={() => setIncomeTimeframe('monthly')}
+              className={`px-2.5 py-1 rounded transition-colors ${
+                incomeTimeframe === 'monthly'
+                  ? 'bg-slate-800 text-emerald-400 font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Monthly (30d)
+            </button>
+            <button
+              onClick={() => setIncomeTimeframe('annual')}
+              className={`px-2.5 py-1 rounded transition-colors ${
+                incomeTimeframe === 'annual'
+                  ? 'bg-slate-800 text-emerald-400 font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Annual (365d)
+            </button>
+          </div>
+        </div>
+
+        {/* Interactive Configuration Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-950/70 rounded-xl border border-slate-800 text-xs">
+          {/* Validator count selector */}
+          <div className="flex flex-wrap items-center gap-2 font-mono">
+            <span className="text-slate-400 flex items-center gap-1.5">
+              <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+              Validator Count:
+            </span>
+            {[1, 5, 10, 32].map((cnt) => (
+              <button
+                key={cnt}
+                onClick={() => setValidatorCount(cnt)}
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                  validatorCount === cnt
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
+                    : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
+                }`}
+              >
+                {cnt} {cnt === 1 ? 'Val' : 'Vals'} ({cnt * 32} ETH)
+              </button>
+            ))}
+
+            <div className="flex items-center gap-1 ml-1">
+              <span className="text-slate-500 text-[11px]">Custom:</span>
+              <input
+                type="number"
+                min="1"
+                max="500"
+                value={validatorCount}
+                onChange={(e) => setValidatorCount(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-14 px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          {/* MEV-Boost toggle */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setEnableMevBoost((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-mono border transition-colors ${
+                enableMevBoost
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+              }`}
+            >
+              <Sparkles className="w-3 h-3 text-purple-400" />
+              <span>MEV-Boost Relays: {enableMevBoost ? 'ON (+MEV)' : 'OFF (Tips Only)'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Hero Revenue Card & 4 Breakdown Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+          {/* Main Hero Card */}
+          <div className="lg:col-span-5 p-4 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+                  Estimated {incomeTimeframe === 'daily' ? 'Daily' : incomeTimeframe === 'monthly' ? '30-Day' : 'Annual'} Income
+                </span>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold">
+                  {validatorEconomics.effectiveStakingApr.toFixed(2)}% APR
+                </span>
+              </div>
+
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">
+                  {incomeTimeframe === 'daily'
+                    ? validatorEconomics.dailyIncomeEth.toFixed(5)
+                    : incomeTimeframe === 'monthly'
+                    ? validatorEconomics.monthlyIncomeEth.toFixed(4)
+                    : validatorEconomics.annualIncomeEth.toFixed(3)}
+                </span>
+                <span className="text-lg font-bold font-mono text-emerald-400">ETH</span>
+              </div>
+
+              <div className="flex items-center gap-2 mt-0.5 text-xs font-mono text-slate-400">
+                <span>
+                  ≈ <strong className="text-white">
+                    ${(
+                      incomeTimeframe === 'daily'
+                        ? validatorEconomics.dailyIncomeUsd
+                        : incomeTimeframe === 'monthly'
+                        ? validatorEconomics.monthlyIncomeUsd
+                        : validatorEconomics.annualIncomeUsd
+                    ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </strong> USD
+                </span>
+                <span className="text-slate-600">·</span>
+                <span className="text-[11px] text-slate-500">at ~${ethUsdPrice}/ETH</span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800/80 text-[11px] font-mono text-slate-400 flex items-center justify-between">
+              <span>Staked Principal: <strong className="text-white">{validatorEconomics.totalStakedEth} ETH</strong></span>
+              <span className="text-emerald-400">~{validatorEconomics.expectedAnnualProposals} proposals/yr</span>
+            </div>
+          </div>
+
+          {/* 4 Stat Cards */}
+          <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Typical Block Reward */}
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase font-mono">Typical Block Reward</span>
+                <div className="text-sm font-bold font-mono text-emerald-400 mt-1">
+                  {validatorEconomics.typicalBlockRewardEth.toFixed(4)} <span className="text-[10px] text-slate-400 font-normal">ETH</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
+                  ~${(validatorEconomics.typicalBlockRewardEth * ethUsdPrice).toFixed(1)} USD
+                </span>
+              </div>
+              <div className="text-[9px] text-slate-500 font-mono mt-2 pt-1 border-t border-slate-800/60">
+                Tips + {enableMevBoost ? 'MEV bid' : 'No MEV'}
+              </div>
+            </div>
+
+            {/* Consensus Layer Attestations */}
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase font-mono">Consensus (CL) Yield</span>
+                <div className="text-sm font-bold font-mono text-cyan-400 mt-1">
+                  {validatorEconomics.clPortionPercent}% <span className="text-[10px] text-slate-400 font-normal">share</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
+                  {(validatorEconomics.dailyClRewardPerValidatorEth * validatorEconomics.effectiveValidatorCount).toFixed(5)} ETH/d
+                </span>
+              </div>
+              <div className="text-[9px] text-slate-500 font-mono mt-2 pt-1 border-t border-slate-800/60">
+                Fixed vote issuance
+              </div>
+            </div>
+
+            {/* Execution Layer Proposer Rewards */}
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase font-mono">Execution (EL) Yield</span>
+                <div className="text-sm font-bold font-mono text-purple-400 mt-1">
+                  {validatorEconomics.elPortionPercent}% <span className="text-[10px] text-slate-400 font-normal">share</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
+                  {(validatorEconomics.expectedDailyElRewardPerValidatorEth * validatorEconomics.effectiveValidatorCount).toFixed(5)} ETH/d
+                </span>
+              </div>
+              <div className="text-[9px] text-slate-500 font-mono mt-2 pt-1 border-t border-slate-800/60">
+                Gas priority + MEV
+              </div>
+            </div>
+
+            {/* Proposal Interval */}
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase font-mono">Proposal Cadence</span>
+                <div className="text-sm font-bold font-mono text-amber-400 mt-1">
+                  ~{validatorCount === 1 ? validatorEconomics.daysBetweenProposals : Math.round(validatorEconomics.daysBetweenProposals / validatorCount)} <span className="text-[10px] text-slate-400 font-normal">days</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
+                  between proposals
+                </span>
+              </div>
+              <div className="text-[9px] text-slate-500 font-mono mt-2 pt-1 border-t border-slate-800/60">
+                1 in {validatorEconomics.activeNetworkValidators.toLocaleString()} chance
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Block History Derivations & Model Parameters */}
+        <div className="p-3 bg-slate-950/90 rounded-lg border border-slate-800 text-xs font-mono space-y-2">
+          <div className="flex flex-wrap items-center justify-between text-slate-400 gap-2 pb-1.5 border-b border-slate-800">
+            <span className="font-semibold text-white flex items-center gap-1.5">
+              <Calculator className="w-3.5 h-3.5 text-emerald-400" />
+              Parameters Derived from Live Block History
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono">
+              Window: Recent {recentBlocks.length > 0 ? recentBlocks.length : 20} Blocks
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+            <div>
+              <span className="text-slate-500 block">Rolling Avg BaseFee:</span>
+              <span className="text-emerald-400 font-bold">{validatorEconomics.avgBaseFeeGwei.toFixed(2)} Gwei</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Avg Gas Used / Block:</span>
+              <span className="text-white font-semibold">{(validatorEconomics.avgGasUsed / 1e6).toFixed(2)}M ({Math.round((validatorEconomics.avgGasUsed / 30000000) * 100)}%)</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Estimated Priority Tip:</span>
+              <span className="text-cyan-400 font-semibold">~{validatorEconomics.estimatedPriorityTipGwei.toFixed(2)} Gwei</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">MEV Relay Uplift:</span>
+              <span className="text-purple-400 font-semibold">{enableMevBoost ? `+${validatorEconomics.mevBoostPerBlockEth.toFixed(4)} ETH` : 'Disabled'}</span>
+            </div>
+          </div>
+
+          <div className="pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-[10px] text-slate-500 gap-2">
+            <span>Formula: <strong className="text-slate-400">Total = CL_Attestation (2.9% APR) + (Daily_Proposal_Probability × [Gas_Tips + MEV_Boost])</strong></span>
+            <span>Higher baseFee expands priority tips and MEV bundle bids</span>
           </div>
         </div>
       </div>
