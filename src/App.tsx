@@ -20,6 +20,8 @@ import { RpcConsoleTab } from './components/RpcConsoleTab';
 import { ArchitectureTab } from './components/ArchitectureTab';
 import { NodeRunnerTab } from './components/NodeRunnerTab';
 import { StateExplorerTab } from './components/StateExplorerTab';
+import { TransactionExplorerTab } from './components/TransactionExplorerTab';
+import { TransactionModal } from './components/TransactionModal';
 import { AlertCircle, RefreshCw, Cpu, Activity, ShieldCheck, Terminal, Layers, HardDrive } from 'lucide-react';
 
 export default function App() {
@@ -30,6 +32,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
   const [selectedBlockForModal, setSelectedBlockForModal] = useState<EthereumBlock | null>(null);
+  const [selectedTxForModal, setSelectedTxForModal] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -257,22 +260,32 @@ export default function App() {
           />
         )}
 
-        {/* Tab 2: Interactive JSON-RPC Debugger */}
+        {/* Tab 2: Transaction Explorer */}
+        {activeTab === 'transactions' && (
+          <TransactionExplorerTab
+            currentEndpoint={currentEndpoint}
+            recentBlocks={recentBlocks}
+            metrics={metrics}
+            onSelectBlock={(b) => setSelectedBlockForModal(b)}
+          />
+        )}
+
+        {/* Tab 3: Interactive JSON-RPC Debugger */}
         {activeTab === 'console' && (
           <RpcConsoleTab currentEndpoint={currentEndpoint} />
         )}
 
-        {/* Tab 3: Proof-of-Stake Consensus & Execution Architecture */}
+        {/* Tab 4: Proof-of-Stake Consensus & Execution Architecture */}
         {activeTab === 'architecture' && (
           <ArchitectureTab />
         )}
 
-        {/* Tab 4: Node Runner Config & Deploy Generator */}
+        {/* Tab 5: Node Runner Config & Deploy Generator */}
         {activeTab === 'runner' && (
           <NodeRunnerTab />
         )}
 
-        {/* Tab 5: Account State & Gas Cost Calculator */}
+        {/* Tab 6: Account State & Gas Cost Calculator */}
         {activeTab === 'state' && (
           <StateExplorerTab
             currentEndpoint={currentEndpoint}
@@ -311,7 +324,20 @@ export default function App() {
       <BlockModal
         block={selectedBlockForModal}
         onClose={() => setSelectedBlockForModal(null)}
+        onSelectTx={(tx) => setSelectedTxForModal(typeof tx === 'string' ? tx : tx.hash)}
       />
+
+      {selectedTxForModal && (
+        <TransactionModal
+          txHash={selectedTxForModal}
+          currentEndpoint={currentEndpoint}
+          onClose={() => setSelectedTxForModal(null)}
+          onSelectBlock={(bNum) => {
+            const b = recentBlocks.find((block) => hexToNumber(block.number) === bNum);
+            if (b) setSelectedBlockForModal(b);
+          }}
+        />
+      )}
     </div>
   );
 }

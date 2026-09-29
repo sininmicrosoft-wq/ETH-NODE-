@@ -199,3 +199,57 @@ export function timeAgo(timestampSec: number): string {
   const diffHours = Math.floor(diffMin / 60);
   return `${diffHours}h ago`;
 }
+
+export function decodeMethodSignature(input?: string | null): { name: string; isContract: boolean; description?: string } {
+  if (!input || input === '0x' || input === '0x00') {
+    return { name: 'Transfer', isContract: false, description: 'Native ETH EOA-to-EOA Transfer' };
+  }
+  const selector = input.slice(0, 10).toLowerCase();
+  switch (selector) {
+    case '0xa9059cbb':
+      return { name: 'transfer(address,uint256)', isContract: true, description: 'ERC-20 Token Transfer' };
+    case '0x095ea7b3':
+      return { name: 'approve(address,uint256)', isContract: true, description: 'Token Spending Approval' };
+    case '0x23b872dd':
+      return { name: 'transferFrom(address,address,uint256)', isContract: true, description: 'ERC-20 Delegated Transfer' };
+    case '0x38ed1739':
+      return { name: 'swapExactTokensForTokens(...)', isContract: true, description: 'Uniswap / DEX Multi-Hop Swap' };
+    case '0x18cbafe5':
+      return { name: 'swapExactETHForTokens(...)', isContract: true, description: 'Uniswap / DEX ETH-to-Token Swap' };
+    case '0x7ff36ab5':
+      return { name: 'swapExactTokensForETH(...)', isContract: true, description: 'Uniswap / DEX Token-to-ETH Swap' };
+    case '0x40c10f19':
+      return { name: 'mint(address,uint256)', isContract: true, description: 'ERC-20 / NFT Mint' };
+    case '0xa22cb465':
+      return { name: 'setApprovalForAll(address,bool)', isContract: true, description: 'ERC-721 / ERC-1155 Operator Approval' };
+    case '0x2e1a7d4d':
+      return { name: 'withdraw(uint256)', isContract: true, description: 'WETH / DeFi Vault Withdrawal' };
+    case '0xd0e30db0':
+      return { name: 'deposit()', isContract: true, description: 'WETH / DeFi Vault Wrap Deposit' };
+    case '0xf340fa01':
+      return { name: 'deposit(address,uint256)', isContract: true, description: 'Lending Pool Deposit' };
+    case '0x42842e0e':
+      return { name: 'safeTransferFrom(address,address,uint256)', isContract: true, description: 'ERC-721 Safe NFT Transfer' };
+    case '0xb6b55f25':
+      return { name: 'depositETH(...)', isContract: true, description: 'L2 Rollup Bridge Deposit' };
+    default:
+      return { name: `Call (${selector})`, isContract: true, description: 'Smart Contract Method Call' };
+  }
+}
+
+export function getTransactionTypeLabel(typeHex?: string | null): string {
+  if (!typeHex) return 'Legacy (Type 0)';
+  const t = hexToNumber(typeHex);
+  switch (t) {
+    case 0:
+      return 'Legacy (Type 0)';
+    case 1:
+      return 'EIP-2930 Access List (Type 1)';
+    case 2:
+      return 'EIP-1559 Dynamic Fee (Type 2)';
+    case 3:
+      return 'EIP-4844 Blob (Type 3)';
+    default:
+      return `Type ${t}`;
+  }
+}

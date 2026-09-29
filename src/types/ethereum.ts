@@ -45,6 +45,29 @@ export interface EthereumTransaction {
   nonce: string;
   value: string;
   transactionIndex?: string;
+  type?: string;
+  chainId?: string;
+}
+
+export interface EthereumTransactionReceipt {
+  transactionHash: string;
+  transactionIndex: string;
+  blockHash: string;
+  blockNumber: string;
+  from: string;
+  to: string | null;
+  cumulativeGasUsed: string;
+  gasUsed: string;
+  contractAddress: string | null;
+  logs: Array<{
+    address: string;
+    topics: string[];
+    data: string;
+    logIndex?: string;
+  }>;
+  status: string; // '0x1' success, '0x0' failure
+  effectiveGasPrice?: string;
+  type?: string;
 }
 
 export interface FeeHistory {

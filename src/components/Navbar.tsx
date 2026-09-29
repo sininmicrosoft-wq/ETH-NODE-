@@ -1,6 +1,6 @@
 import React from 'react';
 import { RpcEndpoint, NodeMetrics } from '../types/ethereum';
-import { Server, RefreshCw, Activity, Layers, Terminal, Cpu, HardDrive, Search } from 'lucide-react';
+import { Server, RefreshCw, Activity, Layers, Terminal, Cpu, HardDrive, Search, ArrowRightLeft } from 'lucide-react';
 
 interface NavbarProps {
   currentEndpoint: RpcEndpoint;
@@ -23,6 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const tabs = [
     { id: 'overview', label: 'Telemetry & Blocks', icon: Activity },
+    { id: 'transactions', label: 'Transaction Explorer', icon: ArrowRightLeft },
     { id: 'console', label: 'JSON-RPC Console', icon: Terminal },
     { id: 'architecture', label: 'PoS Architecture', icon: Layers },
     { id: 'runner', label: 'Node Runner Config', icon: HardDrive },
