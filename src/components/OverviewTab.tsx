@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { EthereumBlock, NodeMetrics, TelemetryLatencyLog } from '../types/ethereum';
+import { GlobalPropagationMap } from './GlobalPropagationMap';
 import {
   hexToNumber,
   weiToGwei,
@@ -1570,6 +1571,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         )}
       </div>
+
+      {/* D3 Global Node Propagation Map */}
+      <GlobalPropagationMap latencyLogs={chartData} hostClientVersion={metrics?.clientVersion} />
 
       {/* Canonical Recent Blocks Table */}
       <div className="bg-slate-900/40 rounded-xl border border-slate-800 overflow-hidden">
