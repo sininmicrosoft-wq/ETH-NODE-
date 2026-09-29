@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Clock,
   TrendingDown,
+  TrendingUp,
   BarChart3,
   LineChart as LineChartIcon,
   ListFilter,
@@ -29,6 +30,8 @@ import {
   Area,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -56,6 +59,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   setAutoRefresh,
 }) => {
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
+  const [gasViewMode, setGasViewMode] = useState<'heatmap' | 'bar'>('heatmap');
   const [showLogsDrawer, setShowLogsDrawer] = useState<boolean>(false);
 
   const currentBlock = recentBlocks[0] || null;
@@ -73,7 +77,6 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     : 52;
 
   // Prepare chart dataset from the last 20 blocks' telemetry logs
-  // If telemetry logs are still populating, generate fallback points matching recentBlocks
   const chartData: TelemetryLatencyLog[] = (latencyLogs.length > 0
     ? latencyLogs
     : recentBlocks.slice(0, 20).reverse().map((b, i) => {
@@ -105,8 +108,83 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const p95Index = Math.floor(sortedLatencies.length * 0.95);
   const p95Latency = sortedLatencies[p95Index] || maxLatency;
 
-  // Custom Recharts Tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  // Base Fee metrics calculations over the last 20 blocks
+  const baseFees = chartData
+    .map((d) => d.baseFeeGwei)
+    .filter((v): v is number => v !== undefined && v > 0);
+
+  const currentBaseFee = baseFees.length > 0
+    ? baseFees[baseFees.length - 1]
+    : (metrics?.baseFeeGwei || 12.5);
+
+  const avgBaseFee = baseFees.length > 0
+    ? Number((baseFees.reduce((a, b) => a + b, 0) / baseFees.length).toFixed(2))
+    : currentBaseFee;
+
+  const minBaseFee = baseFees.length > 0 ? Math.min(...baseFees) : currentBaseFee;
+  const maxBaseFee = baseFees.length > 0 ? Math.max(...baseFees) : currentBaseFee;
+  const firstBaseFee = baseFees.length > 0 ? baseFees[0] : currentBaseFee;
+  const baseFeeDeltaPct = firstBaseFee > 0
+    ? (((currentBaseFee - firstBaseFee) / firstBaseFee) * 100).toFixed(1)
+    : '0.0';
+  const isBaseFeeUp = Number(baseFeeDeltaPct) > 0;
+
+  // 20-Block Gas calculations & matching blocks
+  const gas20Data = chartData.map((d) => {
+    const matchingBlock = recentBlocks.find((b) => hexToNumber(b.number) === d.blockNumber);
+    const gasPercent = d.gasUsedPercent ?? 50;
+    return {
+      ...d,
+      matchingBlock,
+      gasPercent,
+    };
+  });
+
+  const avgGas20 = gas20Data.length > 0
+    ? Math.round(gas20Data.reduce((acc, b) => acc + b.gasPercent, 0) / gas20Data.length)
+    : 50;
+  const blocksAboveTarget20 = gas20Data.filter((b) => b.gasPercent > 50).length;
+  const blocksBelowTarget20 = gas20Data.filter((b) => b.gasPercent <= 50).length;
+
+  const getGasColor = (percent: number) => {
+    if (percent >= 75) {
+      return {
+        bg: 'bg-rose-950/60 border-rose-600/70 hover:border-rose-400 hover:bg-rose-900/70',
+        text: 'text-rose-400',
+        badge: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+        bar: 'bg-rose-500',
+        label: 'Congested',
+      };
+    }
+    if (percent >= 50) {
+      return {
+        bg: 'bg-amber-950/60 border-amber-600/70 hover:border-amber-400 hover:bg-amber-900/70',
+        text: 'text-amber-400',
+        badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+        bar: 'bg-amber-500',
+        label: 'Over Target',
+      };
+    }
+    if (percent >= 30) {
+      return {
+        bg: 'bg-emerald-950/60 border-emerald-600/70 hover:border-emerald-400 hover:bg-emerald-900/70',
+        text: 'text-emerald-400',
+        badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+        bar: 'bg-emerald-500',
+        label: 'Under Target',
+      };
+    }
+    return {
+      bg: 'bg-cyan-950/60 border-cyan-800/70 hover:border-cyan-400 hover:bg-cyan-900/70',
+      text: 'text-cyan-400',
+      badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+      bar: 'bg-cyan-500',
+      label: 'Light Load',
+    };
+  };
+
+  // Custom Recharts Latency Tooltip
+  const CustomLatencyTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data: TelemetryLatencyLog = payload[0].payload;
       return (
@@ -146,6 +224,57 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           {data.builder && data.builder !== 'N/A' && data.builder !== 'Bytes' && (
             <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
               <span className="text-slate-500">Builder:</span>
+              <span className="font-mono text-slate-300 truncate max-w-[120px]">
+                {data.builder}
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Custom Recharts Base Fee Tooltip
+  const CustomBaseFeeTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data: TelemetryLatencyLog = payload[0].payload;
+      const gasRatio = data.gasUsedPercent ?? 50;
+      const diffFromTarget = gasRatio - 50;
+
+      return (
+        <div className="bg-[#111827] border border-amber-500/30 p-3 rounded-lg shadow-xl text-xs font-sans min-w-[220px] space-y-1.5">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+            <span className="font-bold text-white font-mono">
+              Block #{data.blockNumber.toLocaleString()}
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">{data.timestamp}</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400">Base Fee:</span>
+            <span className="font-mono font-bold text-amber-300 text-sm">
+              {data.baseFeeGwei?.toFixed(2) ?? '—'} <span className="text-xs font-normal text-slate-400">Gwei</span>
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400">Gas Used:</span>
+            <span className="font-mono text-slate-200">
+              {gasRatio}% {diffFromTarget > 0 ? `(+${diffFromTarget}% over target)` : `(${diffFromTarget}% under target)`}
+            </span>
+          </div>
+
+          <div className="pt-1 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+            <span className="text-slate-500">EIP-1559 Adjustment:</span>
+            <span className={`font-mono font-medium ${diffFromTarget > 0 ? 'text-amber-400' : 'text-blue-400'}`}>
+              {diffFromTarget > 0 ? 'Fee Raised' : diffFromTarget < 0 ? 'Fee Reduced' : 'Fee Neutral'}
+            </span>
+          </div>
+
+          {data.builder && data.builder !== 'N/A' && data.builder !== 'Bytes' && (
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <span>Proposer:</span>
               <span className="font-mono text-slate-300 truncate max-w-[120px]">
                 {data.builder}
               </span>
@@ -235,39 +364,28 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       </div>
 
-      {/* Historical Retrieval Latency Chart (Last 20 Blocks) */}
-      <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4">
-        {/* Header with Title and Unboxed Statistics */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div>
+      {/* Grid of Two Analytics Charts: Latency Chart & Base Fee Line Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Chart 1: Historical Retrieval Latency Chart */}
+        <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4 flex flex-col justify-between">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  Block Retrieval Latency
+                </h3>
+                <span className="text-[11px] text-slate-400 font-sans">
+                  (Last 20 Blocks)
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                RPC round-trip response benchmark logged per block.
+              </p>
+            </div>
+
             <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-semibold text-white">
-                Historical Block Retrieval Latency
-              </h3>
-              <span className="text-xs text-slate-400 font-sans">
-                (Last 20 Blocks)
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Live response benchmark times logged for canonical block retrieval from the node.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Unboxed Statistical Indicators */}
-            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-              <span>Avg: <strong className="text-emerald-400 font-semibold">{avgLatency}ms</strong></span>
-              <span className="text-slate-600">·</span>
-              <span>Min: <span className="text-slate-200">{minLatency}ms</span></span>
-              <span className="text-slate-600">·</span>
-              <span>Max: <span className="text-slate-200">{maxLatency}ms</span></span>
-              <span className="text-slate-600">·</span>
-              <span>P95: <span className="text-slate-200">{p95Latency}ms</span></span>
-            </div>
-
-            {/* Controls: Area vs Bar & Raw Logs Toggle */}
-            <div className="flex items-center gap-1.5">
               <div className="flex items-center p-0.5 bg-slate-950 rounded-lg border border-slate-800">
                 <button
                   onClick={() => setChartType('area')}
@@ -295,232 +413,445 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
               <button
                 onClick={() => setShowLogsDrawer(!showLogsDrawer)}
-                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded border transition-colors ${
+                className={`flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${
                   showLogsDrawer
                     ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
                 }`}
               >
                 <ListFilter className="w-3 h-3" />
-                <span>Logs ({chartData.length})</span>
+                <span>Logs</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Statistical Subheader */}
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono flex-wrap">
+            <span>Avg: <strong className="text-emerald-400 font-semibold">{avgLatency}ms</strong></span>
+            <span className="text-slate-600">·</span>
+            <span>Min: <span className="text-slate-200">{minLatency}ms</span></span>
+            <span className="text-slate-600">·</span>
+            <span>Max: <span className="text-slate-200">{maxLatency}ms</span></span>
+            <span className="text-slate-600">·</span>
+            <span>P95: <span className="text-slate-200">{p95Latency}ms</span></span>
+          </div>
+
+          {/* Recharts Latency Container */}
+          <div className="h-60 w-full pt-1">
+            <ResponsiveContainer width="100%" height="100%">
+              {chartType === 'area' ? (
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="latencyGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="blockLabel"
+                    stroke="#64748b"
+                    tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                    tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  />
+                  <YAxis
+                    stroke="#64748b"
+                    unit="ms"
+                    tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                    tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    domain={[0, (dataMax: number) => Math.max(80, Math.ceil(dataMax * 1.25))]}
+                  />
+                  <Tooltip content={<CustomLatencyTooltip />} />
+                  <ReferenceLine
+                    y={avgLatency}
+                    stroke="#38bdf8"
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.6}
+                    label={{
+                      value: `Avg ${avgLatency}ms`,
+                      position: 'insideTopRight',
+                      fill: '#38bdf8',
+                      fontSize: 10,
+                      fontFamily: 'JetBrains Mono',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="latencyMs"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#latencyGradient)"
+                    activeDot={{ r: 4, stroke: '#34d399', strokeWidth: 2, fill: '#064e3b' }}
+                  />
+                </AreaChart>
+              ) : (
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="blockLabel"
+                    stroke="#64748b"
+                    tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                    tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  />
+                  <YAxis
+                    stroke="#64748b"
+                    unit="ms"
+                    tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                    tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                    domain={[0, (dataMax: number) => Math.max(80, Math.ceil(dataMax * 1.25))]}
+                  />
+                  <Tooltip content={<CustomLatencyTooltip />} />
+                  <ReferenceLine
+                    y={avgLatency}
+                    stroke="#38bdf8"
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.6}
+                    label={{
+                      value: `Avg ${avgLatency}ms`,
+                      position: 'insideTopRight',
+                      fill: '#38bdf8',
+                      fontSize: 10,
+                      fontFamily: 'JetBrains Mono',
+                    }}
+                  />
+                  <Bar
+                    dataKey="latencyMs"
+                    fill="#10b981"
+                    radius={[3, 3, 0, 0]}
+                    opacity={0.85}
+                  />
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 2: EIP-1559 Base Fee Fluctuations Line Chart */}
+        <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4 flex flex-col justify-between">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Fuel className="w-4 h-4 text-amber-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  Base Fee Fluctuations (EIP-1559)
+                </h3>
+                <span className="text-[11px] text-slate-400 font-sans">
+                  (Last 20 Blocks)
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Line chart tracking baseFeeGwei dynamics across the latencyLogs window.
+              </p>
+            </div>
+
+            {/* Change indicator */}
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              <span
+                className={`flex items-center gap-1 font-semibold px-2 py-0.5 rounded border ${
+                  isBaseFeeUp
+                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                    : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                }`}
+              >
+                {isBaseFeeUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                <span>{isBaseFeeUp ? `+${baseFeeDeltaPct}%` : `${baseFeeDeltaPct}%`}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Statistical Subheader */}
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono flex-wrap">
+            <span>Latest: <strong className="text-amber-400 font-semibold">{currentBaseFee.toFixed(2)} Gwei</strong></span>
+            <span className="text-slate-600">·</span>
+            <span>Avg: <span className="text-slate-200">{avgBaseFee.toFixed(2)} Gwei</span></span>
+            <span className="text-slate-600">·</span>
+            <span>Min: <span className="text-slate-200">{minBaseFee.toFixed(2)}</span></span>
+            <span className="text-slate-600">·</span>
+            <span>Max: <span className="text-slate-200">{maxBaseFee.toFixed(2)}</span></span>
+          </div>
+
+          {/* Recharts Line Chart Container */}
+          <div className="h-60 w-full pt-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="blockLabel"
+                  stroke="#64748b"
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                  tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                />
+                <YAxis
+                  stroke="#64748b"
+                  unit="G"
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
+                  tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                  domain={[
+                    (dataMin: number) => Math.max(0, Math.floor(dataMin * 0.9)),
+                    (dataMax: number) => Math.ceil(dataMax * 1.15),
+                  ]}
+                />
+                <Tooltip content={<CustomBaseFeeTooltip />} />
+                <ReferenceLine
+                  y={avgBaseFee}
+                  stroke="#f59e0b"
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.6}
+                  label={{
+                    value: `Avg ${avgBaseFee} Gwei`,
+                    position: 'insideTopRight',
+                    fill: '#f59e0b',
+                    fontSize: 10,
+                    fontFamily: 'JetBrains Mono',
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="baseFeeGwei"
+                  stroke="#f59e0b"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: '#f59e0b', stroke: '#78350f', strokeWidth: 1.5 }}
+                  activeDot={{ r: 5, fill: '#fbbf24', stroke: '#451a03', strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Collapsible Telemetry Logs Drawer */}
+      {showLogsDrawer && (
+        <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800 animate-in fade-in duration-200 space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-semibold text-slate-200">
+              Telemetry Logs Journal ({chartData.length} records)
+            </span>
+            <span>Recorded chronological block telemetry</span>
+          </div>
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/70 divide-y divide-slate-800/60 font-mono text-xs">
+            {chartData.slice().reverse().map((log) => (
+              <div
+                key={log.blockNumber}
+                className="px-3 py-2 flex items-center justify-between hover:bg-slate-800/40 text-[11px]"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-emerald-400 font-semibold">
+                    #{log.blockNumber.toLocaleString()}
+                  </span>
+                  <span className="text-slate-400 font-sans">
+                    {log.timestamp}
+                  </span>
+                  {log.builder && log.builder !== 'N/A' && log.builder !== 'Bytes' && (
+                    <span className="text-slate-300 font-sans hidden sm:inline">
+                      Builder: {log.builder}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4 text-right">
+                  {log.baseFeeGwei !== undefined && (
+                    <span className="text-amber-400 font-medium">
+                      {log.baseFeeGwei.toFixed(2)} Gwei
+                    </span>
+                  )}
+                  {log.gasUsedPercent !== undefined && (
+                    <span className="text-slate-400 hidden sm:inline">
+                      {log.gasUsedPercent}% Gas
+                    </span>
+                  )}
+                  <span
+                    className={`font-semibold ${
+                      log.latencyMs < 80
+                        ? 'text-emerald-400'
+                        : log.latencyMs < 160
+                        ? 'text-blue-400'
+                        : 'text-amber-400'
+                    }`}
+                  >
+                    {log.latencyMs}ms
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 20-Block Gas Usage Heatmap & Horizontal Congestion Bar Indicator */}
+      <div className="p-5 bg-slate-900/40 rounded-xl border border-slate-800 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-semibold text-white">
+                Gas Utilization Percentage (Last 20 Blocks)
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Heatmap and congestion indicator tracking block fullness relative to the 15M (50%) EIP-1559 gas target.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Unboxed Stats */}
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+              <span>Avg: <strong className="text-emerald-400 font-semibold">{avgGas20}%</strong></span>
+              <span className="text-slate-600">·</span>
+              <span>&gt;50% Target: <span className="text-amber-400">{blocksAboveTarget20}/20</span></span>
+              <span className="text-slate-600">·</span>
+              <span>≤50% Target: <span className="text-emerald-400">{blocksBelowTarget20}/20</span></span>
+            </div>
+
+            {/* View Switcher: Heatmap Grid vs Horizontal Bar */}
+            <div className="flex items-center p-0.5 bg-slate-950 rounded-lg border border-slate-800 text-xs font-medium">
+              <button
+                onClick={() => setGasViewMode('heatmap')}
+                className={`px-2.5 py-1 rounded transition-colors ${
+                  gasViewMode === 'heatmap'
+                    ? 'bg-slate-800 text-emerald-400 font-semibold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Heatmap Grid
+              </button>
+              <button
+                onClick={() => setGasViewMode('bar')}
+                className={`px-2.5 py-1 rounded transition-colors ${
+                  gasViewMode === 'bar'
+                    ? 'bg-slate-800 text-emerald-400 font-semibold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Horizontal Bar
               </button>
             </div>
           </div>
         </div>
 
-        {/* Recharts Visualization Container */}
-        <div className="h-64 w-full pt-1">
-          <ResponsiveContainer width="100%" height="100%">
-            {chartType === 'area' ? (
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="latencyGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="blockLabel"
-                  stroke="#64748b"
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-                  tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                />
-                <YAxis
-                  stroke="#64748b"
-                  unit="ms"
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-                  tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  domain={[0, (dataMax: number) => Math.max(80, Math.ceil(dataMax * 1.25))]}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <ReferenceLine
-                  y={avgLatency}
-                  stroke="#38bdf8"
-                  strokeDasharray="4 4"
-                  strokeOpacity={0.6}
-                  label={{
-                    value: `Avg ${avgLatency}ms`,
-                    position: 'insideTopRight',
-                    fill: '#38bdf8',
-                    fontSize: 10,
-                    fontFamily: 'JetBrains Mono',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="latencyMs"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#latencyGradient)"
-                  activeDot={{ r: 4, stroke: '#34d399', strokeWidth: 2, fill: '#064e3b' }}
-                />
-              </AreaChart>
-            ) : (
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="blockLabel"
-                  stroke="#64748b"
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-                  tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                />
-                <YAxis
-                  stroke="#64748b"
-                  unit="ms"
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-                  tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  domain={[0, (dataMax: number) => Math.max(80, Math.ceil(dataMax * 1.25))]}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <ReferenceLine
-                  y={avgLatency}
-                  stroke="#38bdf8"
-                  strokeDasharray="4 4"
-                  strokeOpacity={0.6}
-                  label={{
-                    value: `Avg ${avgLatency}ms`,
-                    position: 'insideTopRight',
-                    fill: '#38bdf8',
-                    fontSize: 10,
-                    fontFamily: 'JetBrains Mono',
-                  }}
-                />
-                <Bar
-                  dataKey="latencyMs"
-                  fill="#10b981"
-                  radius={[3, 3, 0, 0]}
-                  opacity={0.85}
-                />
-              </BarChart>
-            )}
-          </ResponsiveContainer>
-        </div>
-
-        {/* Collapsible Telemetry Logs Drawer */}
-        {showLogsDrawer && (
-          <div className="mt-3 pt-3 border-t border-slate-800/80 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-              <span className="font-semibold text-slate-200">Telemetry Logs Journal</span>
-              <span>Showing last {chartData.length} block retrieval events</span>
-            </div>
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/70 divide-y divide-slate-800/60 font-mono text-xs">
-              {chartData.slice().reverse().map((log) => (
-                <div
-                  key={log.blockNumber}
-                  className="px-3 py-2 flex items-center justify-between hover:bg-slate-800/40 text-[11px]"
+        {/* View 1: 20-Block Heatmap Grid */}
+        {gasViewMode === 'heatmap' && (
+          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-10 lg:grid-cols-20 gap-1.5 pt-1">
+            {gas20Data.map((item) => {
+              const color = getGasColor(item.gasPercent);
+              return (
+                <button
+                  key={item.blockNumber}
+                  onClick={() => item.matchingBlock && onSelectBlock(item.matchingBlock)}
+                  title={`Block #${item.blockNumber.toLocaleString()}: ${item.gasPercent}% Gas Used · ${item.baseFeeGwei ?? 0} Gwei`}
+                  className={`p-2 rounded-lg border text-left transition-all group flex flex-col justify-between h-28 relative overflow-hidden ${color.bg}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-emerald-400 font-semibold">
-                      #{log.blockNumber.toLocaleString()}
-                    </span>
-                    <span className="text-slate-400 font-sans">
-                      {log.timestamp}
-                    </span>
-                    {log.builder && log.builder !== 'N/A' && log.builder !== 'Bytes' && (
-                      <span className="text-slate-300 font-sans hidden sm:inline">
-                        Builder: {log.builder}
-                      </span>
-                    )}
+                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 w-full">
+                    <span className="truncate">{item.blockLabel}</span>
                   </div>
 
-                  <div className="flex items-center gap-4 text-right">
-                    {log.baseFeeGwei !== undefined && (
-                      <span className="text-amber-400 hidden sm:inline">
-                        {log.baseFeeGwei} Gwei
-                      </span>
-                    )}
-                    {log.gasUsedPercent !== undefined && (
-                      <span className="text-slate-400 hidden sm:inline">
-                        {log.gasUsedPercent}% Gas
-                      </span>
-                    )}
-                    <span
-                      className={`font-semibold ${
-                        log.latencyMs < 80
-                          ? 'text-emerald-400'
-                          : log.latencyMs < 160
-                          ? 'text-blue-400'
-                          : 'text-amber-400'
-                      }`}
-                    >
-                      {log.latencyMs}ms
-                    </span>
+                  <div className="my-auto text-center">
+                    <div className={`text-sm font-bold font-mono ${color.text}`}>
+                      {item.gasPercent}%
+                    </div>
+                    <div className="text-[9px] text-slate-400 uppercase tracking-tighter truncate mt-0.5">
+                      {color.label}
+                    </div>
                   </div>
+
+                  {/* Vertical mini meter */}
+                  <div className="w-full bg-slate-900/80 h-1.5 rounded-full overflow-hidden mt-1">
+                    <div
+                      className={`h-full rounded-full ${color.bar}`}
+                      style={{ width: `${Math.min(100, item.gasPercent)}%` }}
+                    />
+                  </div>
+
+                  <div className="text-[9px] font-mono text-slate-400 text-center truncate mt-1">
+                    {item.baseFeeGwei !== undefined ? `${item.baseFeeGwei.toFixed(1)}g` : '—'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* View 2: Horizontal Bar Indicator (Contiguous 20-Block Bar with Target Guideline) */}
+        {gasViewMode === 'bar' && (
+          <div className="space-y-3 pt-1">
+            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>Block Gas Fill Ratio Sequence (Oldest → Latest)</span>
+                <span className="font-mono text-[11px] text-emerald-400">50% Target = 15,000,000 Gas</span>
+              </div>
+
+              {/* 20 Contiguous Columns */}
+              <div className="h-28 w-full flex items-end gap-1 relative pt-4 pb-1">
+                {/* 50% target horizontal dashed line */}
+                <div className="absolute top-[50%] left-0 right-0 border-b border-dashed border-slate-500/60 z-10 pointer-events-none flex items-center justify-end pr-2">
+                  <span className="text-[9px] font-mono text-slate-400 bg-slate-900/90 px-1 rounded">
+                    50% Elastic Target
+                  </span>
                 </div>
-              ))}
+
+                {gas20Data.map((item) => {
+                  const color = getGasColor(item.gasPercent);
+                  return (
+                    <button
+                      key={item.blockNumber}
+                      onClick={() => item.matchingBlock && onSelectBlock(item.matchingBlock)}
+                      title={`Block #${item.blockNumber.toLocaleString()}: ${item.gasPercent}% Gas Used`}
+                      className="flex-1 h-full flex flex-col justify-end group focus:outline-none"
+                    >
+                      <div className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity text-center truncate mb-1">
+                        {item.gasPercent}%
+                      </div>
+                      <div
+                        className={`w-full rounded-t transition-all ${color.bar} opacity-85 group-hover:opacity-100 group-hover:scale-y-105 origin-bottom`}
+                        style={{ height: `${Math.min(100, item.gasPercent)}%` }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Bottom block labels */}
+              <div className="flex justify-between text-[10px] font-mono text-slate-500 px-0.5">
+                <span>{gas20Data[0]?.blockLabel} (Oldest)</span>
+                <span>{gas20Data[Math.floor(gas20Data.length / 2)]?.blockLabel}</span>
+                <span>{gas20Data[gas20Data.length - 1]?.blockLabel} (Latest Head)</span>
+              </div>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Gas Utilization & EIP-1559 Dynamics Bar */}
-      <div className="p-5 bg-slate-900/40 rounded-xl border border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-400" />
-              EIP-1559 Elastic Block Gas Target
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Ethereum targets 15M gas (50% target). Gas above 50% raises the next block's base fee up to 12.5%; gas below lowers it.
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-xs font-mono">
-            <div className="flex items-center gap-1.5 text-slate-300">
+        {/* Color Scale Legend */}
+        <div className="flex flex-wrap items-center justify-between text-xs pt-1 border-t border-slate-800/80 gap-3">
+          <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400">
+            <span className="text-slate-500 font-medium">Gas Thresholds:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-cyan-500" />
+              <span>&lt;30% Light Load</span>
+            </div>
+            <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded bg-emerald-500" />
-              <span>Avg: {avgGasUsage}%</span>
+              <span>30%–50% Target Nominal</span>
             </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span className="w-2.5 h-2.5 rounded border border-dashed border-slate-500" />
-              <span>Target: 50%</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-amber-500" />
+              <span>50%–75% Above Target (Base fee rises)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-rose-500" />
+              <span>&gt;75% Congested</span>
             </div>
           </div>
-        </div>
 
-        {/* Visual blocks gas chart */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-2">
-          {recentBlocks.slice(0, 12).map((block, idx) => {
-            const num = hexToNumber(block.number);
-            const gasLim = hexToNumber(block.gasLimit);
-            const gasU = hexToNumber(block.gasUsed);
-            const ratio = gasLim > 0 ? (gasU / gasLim) * 100 : 50;
-            const isAboveTarget = ratio > 50;
-            const baseFee = block.baseFeePerGas ? weiToGwei(block.baseFeePerGas).toFixed(1) : '—';
-
-            return (
-              <button
-                key={block.hash || idx}
-                onClick={() => onSelectBlock(block)}
-                className="group p-2.5 bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/90 hover:border-emerald-500/50 rounded-lg text-left transition-all"
-              >
-                <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                  <span>#{num % 1000}</span>
-                  <span className={isAboveTarget ? 'text-amber-400' : 'text-blue-400'}>
-                    {ratio.toFixed(0)}%
-                  </span>
-                </div>
-                <div className="w-full bg-slate-900 h-14 rounded mt-1.5 p-0.5 flex flex-col justify-end relative overflow-hidden">
-                  {/* 50% target guideline */}
-                  <div className="absolute top-1/2 left-0 right-0 border-b border-dashed border-slate-600/50 z-10" />
-                  <div
-                    className={`w-full rounded transition-all ${
-                      ratio > 80 ? 'bg-amber-500/80' : 'bg-emerald-500/70'
-                    } group-hover:bg-emerald-400`}
-                    style={{ height: `${Math.min(100, ratio)}%` }}
-                  />
-                </div>
-                <div className="text-[10px] font-mono text-slate-400 truncate mt-1">
-                  {baseFee} Gwei
-                </div>
-              </button>
-            );
-          })}
+          <div className="text-[11px] text-slate-500 font-mono">
+            Click any block to inspect full receipt & transactions
+          </div>
         </div>
       </div>
 
