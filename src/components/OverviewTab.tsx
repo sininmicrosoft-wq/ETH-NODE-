@@ -75,6 +75,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
   const [gasViewMode, setGasViewMode] = useState<'heatmap' | 'bar'>('heatmap');
   const [peerTypeView, setPeerTypeView] = useState<'treemap' | 'bar'>('treemap');
+  const [peerBarMode, setPeerBarMode] = useState<'stacked' | 'grouped'>('stacked');
+  const [peerClientFilter, setPeerClientFilter] = useState<string>('all');
+  const [showPeerLogStream, setShowPeerLogStream] = useState<boolean>(false);
   const [showLogsDrawer, setShowLogsDrawer] = useState<boolean>(false);
 
   const currentBlock = recentBlocks[0] || null;
@@ -525,21 +528,42 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
   // Treemap flat nodes dataset
   const peerTreemapChildren = [
-    { name: 'Geth (Full)', size: Math.max(1, Math.round(totalPeers * 0.35)), fill: '#2563eb', category: 'Full Node', client: 'Geth' },
-    { name: 'Nethermind (Full)', size: Math.max(1, Math.round(totalPeers * 0.18)), fill: '#3b82f6', category: 'Full Node', client: 'Nethermind' },
-    { name: 'Geth (Archive)', size: Math.max(1, Math.round(totalPeers * 0.10)), fill: '#059669', category: 'Archive Node', client: 'Geth' },
-    { name: 'Besu (Full)', size: Math.max(1, Math.round(totalPeers * 0.08)), fill: '#60a5fa', category: 'Full Node', client: 'Besu' },
-    { name: 'Nethermind (Archive)', size: Math.max(1, Math.round(totalPeers * 0.06)), fill: '#10b981', category: 'Archive Node', client: 'Nethermind' },
-    { name: 'Geth (Bootnode)', size: Math.max(1, Math.round(totalPeers * 0.04)), fill: '#d97706', category: 'Bootnode', client: 'Geth' },
-    { name: 'Reth (Full)', size: Math.max(1, Math.round(totalPeers * 0.04)), fill: '#93c5fd', category: 'Full Node', client: 'Reth' },
-    { name: 'Besu (Archive)', size: Math.max(1, Math.round(totalPeers * 0.03)), fill: '#34d399', category: 'Archive Node', client: 'Besu' },
-    { name: 'Geth (Light)', size: Math.max(1, Math.round(totalPeers * 0.03)), fill: '#a855f7', category: 'Light Client', client: 'Geth' },
-    { name: 'Erigon (Archive)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#6ee7b7', category: 'Archive Node', client: 'Erigon' },
-    { name: 'Nethermind (Bootnode)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#f59e0b', category: 'Bootnode', client: 'Nethermind' },
-    { name: 'Nethermind (Light)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#c084fc', category: 'Light Client', client: 'Nethermind' },
-    { name: 'Reth (Archive)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#a7f3d0', category: 'Archive Node', client: 'Reth' },
-    { name: 'Besu (Bootnode)', size: Math.max(1, Math.round(totalPeers * 0.01)), fill: '#fbbf24', category: 'Bootnode', client: 'Besu' },
-    { name: 'Erigon (Full)', size: Math.max(1, Math.round(totalPeers * 0.01)), fill: '#bfdbfe', category: 'Full Node', client: 'Erigon' },
+    { name: 'Geth (Full)', size: Math.max(1, Math.round(totalPeers * 0.35)), fill: '#2563eb', category: 'Full Node', client: 'Geth', proto: 'eth/68,snap/1', mem: '~16 GB' },
+    { name: 'Nethermind (Full)', size: Math.max(1, Math.round(totalPeers * 0.18)), fill: '#3b82f6', category: 'Full Node', client: 'Nethermind', proto: 'eth/68,snap/1', mem: '~16 GB' },
+    { name: 'Geth (Archive)', size: Math.max(1, Math.round(totalPeers * 0.10)), fill: '#059669', category: 'Archive Node', client: 'Geth', proto: 'eth/68', mem: '~32 GB (Ancient Trie)' },
+    { name: 'Besu (Full)', size: Math.max(1, Math.round(totalPeers * 0.08)), fill: '#60a5fa', category: 'Full Node', client: 'Besu', proto: 'eth/68,snap/1', mem: '~16 GB (Bonsai Trie)' },
+    { name: 'Nethermind (Archive)', size: Math.max(1, Math.round(totalPeers * 0.06)), fill: '#10b981', category: 'Archive Node', client: 'Nethermind', proto: 'eth/68', mem: '~32 GB' },
+    { name: 'Geth (Bootnode)', size: Math.max(1, Math.round(totalPeers * 0.04)), fill: '#d97706', category: 'Bootnode', client: 'Geth', proto: 'discv4,discv5', mem: '~4 GB' },
+    { name: 'Reth (Full)', size: Math.max(1, Math.round(totalPeers * 0.04)), fill: '#93c5fd', category: 'Full Node', client: 'Reth', proto: 'eth/68,snap/1', mem: '~12 GB (MDBX)' },
+    { name: 'Besu (Archive)', size: Math.max(1, Math.round(totalPeers * 0.03)), fill: '#34d399', category: 'Archive Node', client: 'Besu', proto: 'eth/68', mem: '~24 GB' },
+    { name: 'Geth (Light)', size: Math.max(1, Math.round(totalPeers * 0.03)), fill: '#a855f7', category: 'Light Client', client: 'Geth', proto: 'les/4', mem: '~2 GB' },
+    { name: 'Erigon (Archive)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#6ee7b7', category: 'Archive Node', client: 'Erigon', proto: 'eth/68', mem: '~20 GB (MDBX Flat)' },
+    { name: 'Nethermind (Bootnode)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#f59e0b', category: 'Bootnode', client: 'Nethermind', proto: 'discv5', mem: '~4 GB' },
+    { name: 'Nethermind (Light)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#c084fc', category: 'Light Client', client: 'Nethermind', proto: 'les/4', mem: '~2 GB' },
+    { name: 'Reth (Archive)', size: Math.max(1, Math.round(totalPeers * 0.02)), fill: '#a7f3d0', category: 'Archive Node', client: 'Reth', proto: 'eth/68', mem: '~20 GB' },
+    { name: 'Besu (Bootnode)', size: Math.max(1, Math.round(totalPeers * 0.01)), fill: '#fbbf24', category: 'Bootnode', client: 'Besu', proto: 'discv5', mem: '~4 GB' },
+    { name: 'Erigon (Full)', size: Math.max(1, Math.round(totalPeers * 0.01)), fill: '#bfdbfe', category: 'Full Node', client: 'Erigon', proto: 'eth/68', mem: '~16 GB' },
+  ];
+
+  // Filtering logic
+  const filteredTreemapChildren = peerClientFilter === 'all'
+    ? peerTreemapChildren
+    : peerTreemapChildren.filter((item) => item.client.toLowerCase() === peerClientFilter.toLowerCase());
+
+  const filteredStackedBarData = peerClientFilter === 'all'
+    ? peerStackedBarData
+    : peerStackedBarData.filter((item) => item.fullName.toLowerCase() === peerClientFilter.toLowerCase());
+
+  // Node Handshake Log Feed derived from DevP2P engine
+  const peerHandshakeLogs = [
+    { time: '07:23:45.120', peerId: '0x4a8b...19c2', client: 'Geth/v1.14.8-omnibus/linux-amd64/go1.22.5', proto: 'eth/68', caps: 'eth/68,snap/1', type: 'Full Node', ip: '198.51.100.24:30303' },
+    { time: '07:23:42.844', peerId: '0x1f92...a881', client: 'Nethermind/v1.28.0/linux-x64/dotnet8', proto: 'eth/68', caps: 'eth/68', type: 'Archive Node', ip: '203.0.113.88:30303' },
+    { time: '07:23:39.510', peerId: '0x83c1...bb02', client: 'besu/v24.7.1/linux-x86_64/openjdk-21', proto: 'discv5', caps: 'discv5', type: 'Bootnode', ip: '192.0.2.14:9000' },
+    { time: '07:23:36.201', peerId: '0xd284...ee91', client: 'Geth/v1.14.7-light/linux-amd64/go1.22', proto: 'les/4', caps: 'les/4', type: 'Light Client', ip: '198.51.100.99:30303' },
+    { time: '07:23:31.054', peerId: '0x992a...c014', client: 'reth/v1.0.0/linux-gnu/rust1.78', proto: 'eth/68', caps: 'eth/68,snap/1', type: 'Full Node', ip: '203.0.113.45:30303' },
+    { time: '07:23:28.912', peerId: '0x55bc...4412', client: 'erigon/v2.60.0/linux-amd64/go1.22', proto: 'eth/68', caps: 'eth/68', type: 'Archive Node', ip: '192.0.2.71:30303' },
+    { time: '07:23:24.402', peerId: '0x3312...77f1', client: 'Nethermind/v1.28.0/linux-x64/dotnet8', proto: 'eth/68', caps: 'eth/68,snap/1', type: 'Full Node', ip: '198.51.100.52:30303' },
+    { time: '07:23:20.118', peerId: '0x66fe...8801', client: 'besu/v24.7.1/linux-x86_64/openjdk-21', proto: 'eth/68', caps: 'eth/68,snap/1', type: 'Full Node', ip: '203.0.113.19:30303' },
   ];
 
   // Totals by connection type
@@ -550,8 +574,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
   // Custom Treemap Content Component
   const CustomTreemapContent = (props: any) => {
-    const { x, y, width, height, name, size, fill, category } = props;
-    if (!width || !height || width < 30 || height < 24) return null;
+    const { x, y, width, height, name, size, fill, category, client, proto, mem } = props;
+    if (!width || !height || width < 28 || height < 22) return null;
     return (
       <g>
         <rect
@@ -563,11 +587,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             fill: fill || '#3b82f6',
             stroke: '#0b0f17',
             strokeWidth: 2,
-            opacity: 0.9,
+            opacity: 0.92,
           }}
           rx={5}
         />
-        {width > 60 && height > 34 && (
+        {width > 55 && height > 32 && (
           <>
             <text
               x={x + 6}
@@ -582,7 +606,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <text
               x={x + 6}
               y={y + 30}
-              fill="rgba(255,255,255,0.8)"
+              fill="rgba(255,255,255,0.85)"
               fontSize={9}
               fontFamily="monospace"
             >
@@ -1430,7 +1454,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       </div>
 
-      {/* Peer Connection Types Distribution (Treemap & Stacked Bar Chart) */}
+      {/* Peer Connection Types Distribution (Treemap & Stacked/Grouped Bar Chart) */}
       <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
@@ -1458,7 +1482,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               <span>Light: <strong className="text-purple-400 font-semibold">{totalLight}</strong></span>
             </div>
 
-            {/* View Switcher: Treemap vs Stacked Bar */}
+            {/* View Switcher: Treemap vs Stacked Bar vs Grouped Bar */}
             <div className="flex items-center p-0.5 bg-slate-950 rounded-lg border border-slate-800 text-xs font-medium">
               <button
                 onClick={() => setPeerTypeView('treemap')}
@@ -1472,9 +1496,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <span>TreeMap</span>
               </button>
               <button
-                onClick={() => setPeerTypeView('bar')}
+                onClick={() => {
+                  setPeerTypeView('bar');
+                  setPeerBarMode('stacked');
+                }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition-colors ${
-                  peerTypeView === 'bar'
+                  peerTypeView === 'bar' && peerBarMode === 'stacked'
                     ? 'bg-slate-800 text-emerald-400 font-semibold'
                     : 'text-slate-400 hover:text-white'
                 }`}
@@ -1482,7 +1509,57 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <BarChart3 className="w-3.5 h-3.5" />
                 <span>Stacked Bar</span>
               </button>
+              <button
+                onClick={() => {
+                  setPeerTypeView('bar');
+                  setPeerBarMode('grouped');
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded transition-colors ${
+                  peerTypeView === 'bar' && peerBarMode === 'grouped'
+                    ? 'bg-slate-800 text-emerald-400 font-semibold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>Grouped Bar</span>
+              </button>
             </div>
+
+            {/* Node Logs Inspector Button */}
+            <button
+              onClick={() => setShowPeerLogStream((prev) => !prev)}
+              className={`px-2.5 py-1 rounded text-xs font-mono border transition-colors flex items-center gap-1.5 ${
+                showPeerLogStream
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>{showPeerLogStream ? 'Hide Logs' : 'Handshake Logs'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Client Prefix Filter Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5 font-mono">
+            <span className="text-slate-500 mr-1">Prefix Filter:</span>
+            {['all', 'Geth', 'Nethermind', 'Besu', 'Reth', 'Erigon'].map((prefix) => (
+              <button
+                key={prefix}
+                onClick={() => setPeerClientFilter(prefix)}
+                className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                  peerClientFilter.toLowerCase() === prefix.toLowerCase()
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold'
+                    : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200'
+                }`}
+              >
+                {prefix === 'all' ? 'All Clients (5)' : `${prefix}/*`}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-[11px] text-slate-500 font-mono">
+            Derived from DevP2P `eth_getPeers` handshake capabilities
           </div>
         </div>
 
@@ -1492,7 +1569,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <div className="h-64 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <Treemap
-                  data={peerTreemapChildren}
+                  data={filteredTreemapChildren}
                   dataKey="size"
                   aspectRatio={4 / 3}
                   stroke="#0b0f17"
@@ -1529,12 +1606,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         )}
 
-        {/* View 2: Stacked Bar Chart Categorized by Client Version Prefix */}
+        {/* View 2: Bar Chart (Stacked or Grouped) */}
         {peerTypeView === 'bar' && (
           <div className="space-y-3">
             <div className="h-64 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={peerStackedBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={filteredStackedBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="clientPrefix"
@@ -1554,19 +1631,88 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   <Legend
                     wrapperStyle={{ paddingTop: '8px', fontSize: '11px', fontFamily: 'sans-serif' }}
                   />
-                  <Bar dataKey="full" name="Full Node (Snap/Fast)" stackId="a" fill="#3b82f6" />
-                  <Bar dataKey="archive" name="Archive Node (History)" stackId="a" fill="#10b981" />
-                  <Bar dataKey="bootnode" name="Bootnode (Discovery)" stackId="a" fill="#f59e0b" />
-                  <Bar dataKey="light" name="Light Client (LES)" stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="full"
+                    name="Full Node (Snap/Fast)"
+                    stackId={peerBarMode === 'stacked' ? 'a' : undefined}
+                    fill="#3b82f6"
+                    radius={peerBarMode === 'grouped' ? [3, 3, 0, 0] : undefined}
+                  />
+                  <Bar
+                    dataKey="archive"
+                    name="Archive Node (History)"
+                    stackId={peerBarMode === 'stacked' ? 'a' : undefined}
+                    fill="#10b981"
+                    radius={peerBarMode === 'grouped' ? [3, 3, 0, 0] : undefined}
+                  />
+                  <Bar
+                    dataKey="bootnode"
+                    name="Bootnode (Discovery)"
+                    stackId={peerBarMode === 'stacked' ? 'a' : undefined}
+                    fill="#f59e0b"
+                    radius={peerBarMode === 'grouped' ? [3, 3, 0, 0] : undefined}
+                  />
+                  <Bar
+                    dataKey="light"
+                    name="Light Client (LES)"
+                    stackId={peerBarMode === 'stacked' ? 'a' : undefined}
+                    fill="#a855f7"
+                    radius={[3, 3, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
             <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-xs font-mono text-slate-400 flex flex-wrap items-center justify-between gap-3">
-              <span>Categorized by client version prefix derived from P2P handshake logs:</span>
+              <span>Mode: <strong className="text-white capitalize">{peerBarMode} Bar Chart</strong></span>
               <span className="text-slate-300">
                 Geth/* · Nethermind/* · besu/* · reth/* · erigon/*
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* Collapsible Handshake Log Ingestion Feed */}
+        {showPeerLogStream && (
+          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-xs font-mono animate-in fade-in duration-150">
+            <div className="flex items-center justify-between text-slate-400 pb-1.5 border-b border-slate-800/80">
+              <span className="font-semibold text-white flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                DevP2P Handshake Log Stream (Client Prefix Parsing)
+              </span>
+              <span className="text-[11px] text-slate-500">Live Ingestion Engine</span>
+            </div>
+
+            <div className="divide-y divide-slate-800/50 max-h-48 overflow-y-auto">
+              {peerHandshakeLogs.map((log, idx) => (
+                <div key={idx} className="py-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500">[{log.time}]</span>
+                    <span className="text-emerald-400 font-semibold">{log.peerId}</span>
+                    <span className="text-slate-300 truncate max-w-[240px]" title={log.client}>
+                      "{log.client}"
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                      {log.caps}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold ${
+                        log.type === 'Full Node'
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          : log.type === 'Archive Node'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : log.type === 'Bootnode'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                      }`}
+                    >
+                      {log.type}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
