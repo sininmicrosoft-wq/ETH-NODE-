@@ -25,6 +25,7 @@ import {
   Zap,
   Users,
   Network,
+  Gauge,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -37,6 +38,9 @@ import {
   RadialBarChart,
   RadialBar,
   PolarAngleAxis,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -396,6 +400,67 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className={data.share > 33 ? 'text-amber-400' : 'text-emerald-400'}>
               {data.status}
             </span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Block Difficulty & Consensus Target Calculations
+  const currentBlockDifficultyHex = currentBlock?.difficulty || '0x0';
+  const currentBlockDifficulty = hexToNumber(currentBlockDifficultyHex);
+
+  const nonZeroDifficulties = recentBlocks
+    .map((b) => (b.difficulty ? hexToNumber(b.difficulty) : 0))
+    .filter((d) => d > 0);
+
+  const hasNonZeroDifficulty = currentBlockDifficulty > 0 || nonZeroDifficulties.length > 0;
+
+  const networkAvgDifficulty = nonZeroDifficulties.length > 0
+    ? nonZeroDifficulties.reduce((a, b) => a + b, 0) / nonZeroDifficulties.length
+    : (currentBlockDifficulty > 0 ? currentBlockDifficulty : 1);
+
+  const relativeDifficultyRatio = hasNonZeroDifficulty && networkAvgDifficulty > 0
+    ? Number(((currentBlockDifficulty / networkAvgDifficulty) * 100).toFixed(1))
+    : 100.0;
+
+  const clampedGaugeValue = Math.min(200, Math.max(0, relativeDifficultyRatio));
+
+  let gaugeStatusColor = '#10b981'; // emerald
+  let gaugeStatusLabel = 'Optimal Target (100%)';
+  if (relativeDifficultyRatio > 115) {
+    gaugeStatusColor = '#f59e0b'; // amber
+    gaugeStatusLabel = 'Above Average Target';
+  } else if (relativeDifficultyRatio < 85) {
+    gaugeStatusColor = '#38bdf8'; // cyan
+    gaugeStatusLabel = 'Below Average Target';
+  }
+
+  // Semi-circular gauge chart segments
+  const gaugeTrackData = [
+    { name: 'Sub-Target (<80%)', value: 80, fill: 'rgba(56, 189, 248, 0.25)' },
+    { name: 'Nominal Target (80-120%)', value: 40, fill: 'rgba(16, 185, 129, 0.4)' },
+    { name: 'Above Target (>120%)', value: 80, fill: 'rgba(245, 158, 11, 0.25)' },
+  ];
+
+  const gaugeValueData = [
+    { name: 'Current Relative Difficulty', value: clampedGaugeValue, fill: gaugeStatusColor },
+    { name: 'Remaining Headroom', value: Math.max(0, 200 - clampedGaugeValue), fill: 'transparent' },
+  ];
+
+  // Custom Recharts Gauge Tooltip
+  const CustomGaugeTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div className="bg-[#111827] border border-slate-700/80 p-2.5 rounded-lg shadow-xl text-xs font-sans space-y-1">
+          <div className="font-bold text-white font-mono">{data.name}</div>
+          <div className="text-slate-400">
+            Relative Ratio: <span className="font-mono text-emerald-400 font-semibold">{relativeDifficultyRatio}%</span>
+          </div>
+          <div className="text-[10px] text-slate-500 font-mono">
+            Raw Block Difficulty: {currentBlockDifficultyHex}
           </div>
         </div>
       );
@@ -972,128 +1037,235 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       </div>
 
-      {/* P2P Peer Client Distribution Radial Bar Chart (Recharts) */}
-      <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Network className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-semibold text-white">
-                P2P Peer Client Distribution & Node Diversity
-              </h3>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Radial bar visualization of connected peer node implementations inferred from client version telemetry ({detectedHostClient}).
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-400 flex-wrap">
-            <span>Host: <strong className="text-emerald-400 font-semibold">{detectedHostClient}</strong></span>
-            <span className="text-slate-600">·</span>
-            <span>Peers: <span className="text-white">{totalPeers} Connected</span></span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-300">DevP2P eth/68</span>
-          </div>
-        </div>
-
-        {/* Content Grid: Radial Bar Chart (Left) + Detailed Client Distribution Matrix (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-          {/* Left Column: Recharts RadialBarChart */}
-          <div className="lg:col-span-5 relative flex items-center justify-center">
-            <div className="w-full h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="25%"
-                  outerRadius="100%"
-                  barSize={12}
-                  data={peerRadialData}
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  <PolarAngleAxis
-                    type="number"
-                    domain={[0, 60]}
-                    angleAxisId={0}
-                    tick={false}
-                  />
-                  <RadialBar
-                    background={{ fill: 'rgba(255, 255, 255, 0.04)' }}
-                    dataKey="share"
-                    cornerRadius={6}
-                  />
-                  <Tooltip content={<CustomPeerTooltip />} />
-                </RadialBarChart>
-              </ResponsiveContainer>
+      {/* 2-Column Section: P2P Peer Client Distribution (Radial Bar) & Block Difficulty Gauge (Semi-Circular Gauge) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Card 1: P2P Peer Client Distribution Radial Bar Chart (Recharts) */}
+        <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4 flex flex-col justify-between">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Network className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  Peer Client Distribution
+                </h3>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Radial bar representation of connected peer nodes ({detectedHostClient}).
+              </p>
             </div>
 
-            {/* Center Circular Overlay Badge */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-lg font-bold font-mono text-white tracking-tight">
-                  {totalPeers}
+            <div className="flex items-center gap-2 text-xs font-mono text-slate-400 flex-wrap">
+              <span>Host: <strong className="text-emerald-400 font-semibold">{detectedHostClient}</strong></span>
+              <span className="text-slate-600">·</span>
+              <span>Peers: <span className="text-white">{totalPeers}</span></span>
+            </div>
+          </div>
+
+          {/* Content: Radial Bar Chart + Legend */}
+          <div className="space-y-4">
+            <div className="relative flex items-center justify-center">
+              <div className="w-full h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="25%"
+                    outerRadius="100%"
+                    barSize={10}
+                    data={peerRadialData}
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    <PolarAngleAxis
+                      type="number"
+                      domain={[0, 60]}
+                      angleAxisId={0}
+                      tick={false}
+                    />
+                    <RadialBar
+                      background={{ fill: 'rgba(255, 255, 255, 0.04)' }}
+                      dataKey="share"
+                      cornerRadius={6}
+                    />
+                    <Tooltip content={<CustomPeerTooltip />} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Center Circular Overlay Badge */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                <div className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-base font-bold font-mono text-white tracking-tight">
+                    {totalPeers}
+                  </span>
+                </div>
+                <span className="text-[9px] text-slate-400 uppercase tracking-wider font-mono">
+                  Peers
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-mono">
-                Peers
-              </span>
-            </div>
-          </div>
-
-          {/* Right Column: Client Breakdown & Diversity Status Table */}
-          <div className="lg:col-span-7 space-y-2.5">
-            <div className="text-xs font-semibold text-slate-300 flex items-center justify-between pb-1 border-b border-slate-800/80">
-              <span>Client Implementation</span>
-              <span>Network Share & Estimated Peers</span>
             </div>
 
+            {/* Client Breakdown List */}
             <div className="divide-y divide-slate-800/60 font-mono text-xs">
               {peerRadialData.map((client) => (
                 <div
                   key={client.clientKey}
-                  className={`py-2 px-2.5 rounded-lg flex items-center justify-between transition-colors ${
+                  className={`py-1.5 px-2 rounded-lg flex items-center justify-between transition-colors ${
                     client.isHost
                       ? 'bg-emerald-500/10 border border-emerald-500/30'
                       : 'hover:bg-slate-800/40'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      className="w-2 h-2 rounded-full shrink-0"
                       style={{ backgroundColor: client.fill }}
                     />
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-white">{client.name}</span>
-                        {client.isHost && (
-                          <span className="text-[9px] uppercase font-sans font-bold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40">
-                            Host Node
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-sans mt-0.5">
-                        {client.language} · <span className={client.share > 33 ? 'text-amber-400' : 'text-emerald-400'}>{client.status}</span>
-                      </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-white text-[11px]">{client.name}</span>
+                      {client.isHost && (
+                        <span className="text-[8px] uppercase font-sans font-bold bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded border border-emerald-500/40">
+                          Host
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <div className="font-bold text-white">
+                  <div className="text-right flex items-center gap-3">
+                    <span className="font-bold text-white text-[11px]">
                       {client.share}%
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      ~{client.peers} peers
-                    </div>
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      ~{client.peers}p
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
 
-            <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 text-[11px] text-slate-400 leading-relaxed font-sans">
-              <strong>Diversity Notice:</strong> Geth accounts for &gt;50% of the execution network. Operators are encouraged to run minority clients (Nethermind, Besu, Reth) to avoid catastrophic consensus finality failure in the event of client-specific bugs.
+        {/* Card 2: Block Difficulty Target Semi-Circular Gauge Chart */}
+        <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4 flex flex-col justify-between">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  Block Difficulty Target Gauge
+                </h3>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Semi-circular gauge measuring current block difficulty relative to network average.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-mono text-slate-400 flex-wrap">
+              <span>Ratio: <strong style={{ color: gaugeStatusColor }}>{relativeDifficultyRatio.toFixed(1)}%</strong></span>
+              <span className="text-slate-600">·</span>
+              <span>Raw: <span className="text-white">{currentBlockDifficultyHex}</span></span>
+            </div>
+          </div>
+
+          {/* Semi-Circular Gauge Chart Container */}
+          <div className="space-y-2">
+            <div className="relative flex flex-col items-center justify-center pt-2">
+              <div className="w-full h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    {/* Background Colored Track Arc (0% - 200%) */}
+                    <Pie
+                      data={gaugeTrackData}
+                      cx="50%"
+                      cy="85%"
+                      startAngle={180}
+                      endAngle={0}
+                      innerRadius="70%"
+                      outerRadius="95%"
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {gaugeTrackData.map((entry, index) => (
+                        <Cell key={`track-cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+
+                    {/* Active Progress Needle Fill Arc */}
+                    <Pie
+                      data={gaugeValueData}
+                      cx="50%"
+                      cy="85%"
+                      startAngle={180}
+                      endAngle={0}
+                      innerRadius="76%"
+                      outerRadius="89%"
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      <Cell fill={gaugeStatusColor} />
+                      <Cell fill="transparent" />
+                    </Pie>
+                    <Tooltip content={<CustomGaugeTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Center Gauge Overlay Metrics (Bottom Center of the 180° Arc) */}
+              <div className="absolute bottom-2 flex flex-col items-center justify-center pointer-events-none text-center">
+                <div className="text-2xl font-bold font-mono tracking-tight text-white flex items-baseline gap-1">
+                  <span>{relativeDifficultyRatio.toFixed(1)}</span>
+                  <span className="text-xs font-normal text-slate-400">%</span>
+                </div>
+                <div className="text-[10px] text-slate-400 uppercase font-mono tracking-wider">
+                  of Network Average
+                </div>
+                <div
+                  className="mt-1 text-[10px] font-mono px-2 py-0.5 rounded border"
+                  style={{
+                    color: gaugeStatusColor,
+                    borderColor: `${gaugeStatusColor}40`,
+                    backgroundColor: `${gaugeStatusColor}15`,
+                  }}
+                >
+                  {gaugeStatusLabel}
+                </div>
+              </div>
+            </div>
+
+            {/* Arc Boundary Scale Labels */}
+            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 px-4 pt-1">
+              <span>0% (Low)</span>
+              <span>100% Target Baseline</span>
+              <span>200% (High)</span>
+            </div>
+
+            {/* Detailed Difficulty Specs Grid */}
+            <div className="mt-3 p-3 bg-slate-950 rounded-lg border border-slate-800 text-xs space-y-1.5 font-mono">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-sans">Block Difficulty Field:</span>
+                <span className="text-white font-semibold">{currentBlockDifficultyHex}</span>
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-sans">Consensus Framework:</span>
+                <span className="text-emerald-400">
+                  {currentBlockDifficulty === 0 ? 'PoS Paris / The Merge (EIP-3675)' : 'Ethash Proof-of-Work Target'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-sans">Terminal Total Difficulty:</span>
+                <span className="text-slate-300">58,750,000,000,000,000,000,000</span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-800/80">
+                <span className="text-slate-400 font-sans">Target Baseline Deviation:</span>
+                <span style={{ color: gaugeStatusColor }}>
+                  {relativeDifficultyRatio >= 100
+                    ? `+${(relativeDifficultyRatio - 100).toFixed(1)}%`
+                    : `-${(100 - relativeDifficultyRatio).toFixed(1)}%`}
+                </span>
+              </div>
             </div>
           </div>
         </div>
