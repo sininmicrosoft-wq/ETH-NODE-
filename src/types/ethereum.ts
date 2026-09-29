@@ -54,6 +54,16 @@ export interface FeeHistory {
   reward?: string[][];
 }
 
+export interface TelemetryLatencyLog {
+  blockNumber: number;
+  blockLabel: string;
+  latencyMs: number;
+  timestamp: string;
+  baseFeeGwei?: number;
+  gasUsedPercent?: number;
+  builder?: string;
+}
+
 export interface NodeMetrics {
   blockNumber: number;
   blockHash: string;
