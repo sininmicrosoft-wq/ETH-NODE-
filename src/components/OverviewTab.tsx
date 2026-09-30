@@ -3,6 +3,7 @@ import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } 
 import { GlobalPropagationMap } from './GlobalPropagationMap';
 import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
 import { NetworkLatencyTrendChart } from './NetworkLatencyTrendChart';
+import { PeerUptimeHeatmap } from './PeerUptimeHeatmap';
 import { BlobGasFeesTrendChart } from './BlobGasFeesTrendChart';
 import { PeerClientVersionDistributionChart } from './PeerClientVersionDistributionChart';
 import { SystemLogsCard } from './SystemLogsCard';
@@ -3542,6 +3543,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       <NetworkLatencyTrendChart
         peerCount={metrics?.peerCount || 48}
         currentLatency={avgLatency}
+      />
+
+      {/* D3 Peer Uptime Heatmap (Last 24 Hours) */}
+      <PeerUptimeHeatmap
+        peerCount={metrics?.peerCount || 48}
+        clientVersion={metrics?.clientVersion}
       />
 
       {/* Consecutive Block Time Interval Scatter Plot (Slot sync and missed proposal analysis) */}
