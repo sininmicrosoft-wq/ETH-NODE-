@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } from '../types/ethereum';
 import { GlobalPropagationMap } from './GlobalPropagationMap';
+import { SystemLogsCard } from './SystemLogsCard';
 import {
   hexToNumber,
   weiToGwei,
@@ -3709,6 +3710,16 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Consensus Client System Logs Terminal */}
+      <SystemLogsCard
+        latestBlockNum={latestBlockNum}
+        currentBaseFee={currentBaseFee || 15.0}
+        peerCount={metrics?.peerCount || 48}
+        clientVersion={metrics?.clientVersion || 'Ethereum PoS Node'}
+        safeBlockNum={metrics?.safeBlockNumber || (latestBlockNum - 32)}
+        finalizedBlockNum={metrics?.finalizedBlockNumber || (latestBlockNum - 64)}
+      />
 
       {/* Canonical Recent Blocks Table */}
       <div className="bg-slate-900/40 rounded-xl border border-slate-800 overflow-hidden">
