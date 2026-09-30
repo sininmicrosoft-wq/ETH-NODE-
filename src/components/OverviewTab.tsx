@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } from '../types/ethereum';
 import { GlobalPropagationMap } from './GlobalPropagationMap';
 import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
+import { NetworkLatencyTrendChart } from './NetworkLatencyTrendChart';
 import { SystemLogsCard } from './SystemLogsCard';
 import { DataUsageRingCard } from './DataUsageRingCard';
 import { ValidatorHealthCard } from './ValidatorHealthCard';
@@ -3501,6 +3502,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       <NetworkLatencyHeatmap
         peerCount={metrics?.peerCount || 48}
         clientVersion={metrics?.clientVersion}
+      />
+
+      {/* Network Latency Trend & Stability Analysis Chart (Last 1 Hour) */}
+      <NetworkLatencyTrendChart
+        peerCount={metrics?.peerCount || 48}
+        currentLatency={avgLatency}
       />
 
       {/* Consecutive Block Time Interval Scatter Plot (Slot sync and missed proposal analysis) */}
