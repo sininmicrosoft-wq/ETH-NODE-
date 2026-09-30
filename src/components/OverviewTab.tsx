@@ -5,6 +5,7 @@ import { PeerGeographicDistributionMap } from './PeerGeographicDistributionMap';
 import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
 import { NetworkLatencyTrendChart } from './NetworkLatencyTrendChart';
 import { PeerUptimeHeatmap } from './PeerUptimeHeatmap';
+import { ChainReorgDetector } from './ChainReorgDetector';
 import { BlobGasFeesTrendChart } from './BlobGasFeesTrendChart';
 import { PeerClientVersionDistributionChart } from './PeerClientVersionDistributionChart';
 import { SystemLogsCard } from './SystemLogsCard';
@@ -3678,6 +3679,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Chain Reorganization Detector Widget */}
+      <ChainReorgDetector
+        recentBlocks={recentBlocks}
+        onSelectBlock={onSelectBlock}
+      />
 
       {/* Consensus Client System Logs Terminal */}
       <SystemLogsCard
