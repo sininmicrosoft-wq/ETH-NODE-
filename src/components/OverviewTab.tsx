@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } from '../types/ethereum';
 import { GlobalPropagationMap } from './GlobalPropagationMap';
+import { PeerGeographicDistributionMap } from './PeerGeographicDistributionMap';
 import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
 import { NetworkLatencyTrendChart } from './NetworkLatencyTrendChart';
 import { PeerUptimeHeatmap } from './PeerUptimeHeatmap';
@@ -3532,6 +3533,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
       {/* D3 Global Node Propagation Map */}
       <GlobalPropagationMap latencyLogs={chartData} hostClientVersion={metrics?.clientVersion} />
+
+      {/* D3 Peer Geographic Distribution & Decentralization Map (Scatter Plot) */}
+      <PeerGeographicDistributionMap
+        peerCount={metrics?.peerCount || 48}
+        hostClientVersion={metrics?.clientVersion}
+      />
 
       {/* D3 Network Latency Heatmap Grid */}
       <NetworkLatencyHeatmap
