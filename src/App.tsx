@@ -254,6 +254,7 @@ export default function App() {
             recentBlocks={recentBlocks}
             latencyLogs={latencyLogs}
             onSelectBlock={(b) => setSelectedBlockForModal(b)}
+            onSelectTx={(tx) => setSelectedTxForModal(typeof tx === 'string' ? tx : tx.hash)}
             isLoading={isLoading}
             autoRefresh={autoRefresh}
             setAutoRefresh={setAutoRefresh}
