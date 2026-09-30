@@ -7,6 +7,7 @@ import { DataUsageRingCard } from './DataUsageRingCard';
 import { ValidatorHealthCard } from './ValidatorHealthCard';
 import { Eip1559FeeEstimatorCard } from './Eip1559FeeEstimatorCard';
 import { Eip1559GasBurnCard } from './Eip1559GasBurnCard';
+import { GasEfficiencyLeaderboardCard } from './GasEfficiencyLeaderboardCard';
 import {
   hexToNumber,
   weiToGwei,
@@ -2344,6 +2345,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <span>Click any transaction to decode full calldata and event logs</span>
         </div>
       </div>
+
+      {/* Gas Efficiency Leaderboard (Top Smart Contracts / Last 100 Blocks) */}
+      <GasEfficiencyLeaderboardCard
+        currentBaseFee={currentBaseFee}
+        latestBlockNum={latestBlockNum}
+      />
 
       {/* Estimated Daily Validator Income & Staking Economics Estimator */}
       <div className="p-5 bg-gradient-to-r from-slate-900/80 via-emerald-950/20 to-slate-900/80 rounded-xl border border-emerald-500/30 relative overflow-hidden space-y-4">
