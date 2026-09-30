@@ -22,6 +22,7 @@ import { NodeRunnerTab } from './components/NodeRunnerTab';
 import { StateExplorerTab } from './components/StateExplorerTab';
 import { TransactionExplorerTab } from './components/TransactionExplorerTab';
 import { TransactionModal } from './components/TransactionModal';
+import { SyncHealthAlertBanner } from './components/SyncHealthAlertBanner';
 import { AlertCircle, RefreshCw, Cpu, Activity, ShieldCheck, Terminal, Layers, HardDrive } from 'lucide-react';
 
 export default function App() {
@@ -219,6 +220,16 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Automated Sync Health Alert Monitor Banner */}
+        <SyncHealthAlertBanner
+          metrics={metrics}
+          recentBlocks={recentBlocks}
+          currentEndpoint={currentEndpoint}
+          onSwitchEndpoint={(ep) => setCurrentEndpoint(ep)}
+          onForceRefresh={() => fetchTelemetry(true)}
+          isRefreshing={isRefreshing}
+        />
+
         {/* Error notification if endpoint is having issues */}
         {fetchError && (
           <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center justify-between text-xs text-rose-300">

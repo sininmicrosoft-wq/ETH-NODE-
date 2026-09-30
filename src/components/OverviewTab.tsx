@@ -54,6 +54,7 @@ import {
   Copy,
   Check,
   HeartPulse,
+  WifiOff,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -1474,6 +1475,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     return null;
   };
 
+  // Check latest block age in seconds for sync health
+  const headBlockTimestamp = recentBlocks[0]?.timestamp ? hexToNumber(recentBlocks[0].timestamp) : 0;
+  const headBlockAgeSec = headBlockTimestamp > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - headBlockTimestamp) : 0;
+  const isHeadLaggingOver5Min = headBlockAgeSec >= 300;
+  const isPeersStalled = metrics?.peerCount !== undefined && metrics.peerCount < 8;
+
   return (
     <div className="space-y-6">
       {/* Top Telemetry Metric Grid */}
@@ -1526,10 +1533,22 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-[11px]">
             <span className="text-slate-400">Status:</span>
-            <span className="text-emerald-400 font-medium flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" />
-              Synced (Nominal)
-            </span>
+            {isHeadLaggingOver5Min ? (
+              <span className="text-amber-400 font-medium flex items-center gap-1 font-mono">
+                <AlertTriangle className="w-3 h-3 text-amber-400 animate-pulse" />
+                Desynced ({Math.floor(headBlockAgeSec / 60)}m lag)
+              </span>
+            ) : isPeersStalled ? (
+              <span className="text-rose-400 font-medium flex items-center gap-1 font-mono">
+                <WifiOff className="w-3 h-3 text-rose-400" />
+                Stalled Peering
+              </span>
+            ) : (
+              <span className="text-emerald-400 font-medium flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                Synced (Nominal)
+              </span>
+            )}
           </div>
         </div>
 
@@ -1546,7 +1565,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             </div>
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Peers: <span className="font-mono text-slate-200">{metrics?.peerCount || 'Public Node'}</span></span>
+            <span>Peers: <span className={`font-mono ${isPeersStalled ? 'text-rose-400 font-bold' : 'text-slate-200'}`}>{metrics?.peerCount || 'Public Node'}</span></span>
             <span>Chain ID: <span className="font-mono text-slate-200">{metrics?.chainId || 1}</span></span>
           </div>
         </div>
