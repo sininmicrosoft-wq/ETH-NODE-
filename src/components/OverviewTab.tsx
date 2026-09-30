@@ -4,6 +4,7 @@ import { GlobalPropagationMap } from './GlobalPropagationMap';
 import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
 import { NetworkLatencyTrendChart } from './NetworkLatencyTrendChart';
 import { BlobGasFeesTrendChart } from './BlobGasFeesTrendChart';
+import { PeerClientVersionDistributionChart } from './PeerClientVersionDistributionChart';
 import { SystemLogsCard } from './SystemLogsCard';
 import { DataUsageRingCard } from './DataUsageRingCard';
 import { ValidatorHealthCard } from './ValidatorHealthCard';
@@ -3256,6 +3257,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       <DataUsageRingCard
         metrics={metrics}
         latestBlockNum={latestBlockNum}
+      />
+
+      {/* Peer Client Version Distribution & Upgrade Compliance Chart */}
+      <PeerClientVersionDistributionChart
+        peerCount={metrics?.peerCount || 48}
+        clientVersion={metrics?.clientVersion}
       />
 
       {/* Peer Connection Types Distribution (Treemap & Stacked/Grouped Bar Chart) */}
