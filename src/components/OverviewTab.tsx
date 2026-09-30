@@ -3,6 +3,7 @@ import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } 
 import { GlobalPropagationMap } from './GlobalPropagationMap';
 import { SystemLogsCard } from './SystemLogsCard';
 import { DataUsageRingCard } from './DataUsageRingCard';
+import { ValidatorHealthCard } from './ValidatorHealthCard';
 import {
   hexToNumber,
   weiToGwei,
@@ -2730,6 +2731,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Validator Health & Beacon Attestation Monitor */}
+      <ValidatorHealthCard
+        latestBlockNum={latestBlockNum}
+      />
 
       {/* 3-Column Section: P2P Peer Client Distribution (Radial Bar), Transaction Types Donut Chart, & Block Difficulty Gauge (Semi-Circular Gauge) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
