@@ -6,6 +6,7 @@ import { PeerGeographicDistributionMap } from './PeerGeographicDistributionMap';
 import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
 import { NetworkLatencyTrendChart } from './NetworkLatencyTrendChart';
 import { PeerUptimeHeatmap } from './PeerUptimeHeatmap';
+import { PeerDataExportCard } from './PeerDataExportCard';
 import { ChainReorgDetector } from './ChainReorgDetector';
 import { BlobGasFeesTrendChart } from './BlobGasFeesTrendChart';
 import { PeerClientVersionDistributionChart } from './PeerClientVersionDistributionChart';
@@ -3564,6 +3565,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
       {/* D3 Peer Uptime Heatmap (Last 24 Hours) */}
       <PeerUptimeHeatmap
+        peerCount={metrics?.peerCount || 48}
+        clientVersion={metrics?.clientVersion}
+      />
+
+      {/* Peer Data Export & Offline Auditing Card (JSON / CSV) */}
+      <PeerDataExportCard
         peerCount={metrics?.peerCount || 48}
         clientVersion={metrics?.clientVersion}
       />
