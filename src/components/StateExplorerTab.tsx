@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RpcEndpoint } from '../types/ethereum';
 import { callRpc, hexToNumber, weiToEth, weiToGwei, formatAddress } from '../services/ethereumRpc';
+import { StakingRewardEstimator } from './StakingRewardEstimator';
 import {
   Search,
   Wallet,
@@ -13,6 +14,7 @@ import {
   Copy,
   Check,
   RefreshCw,
+  TrendingUp,
 } from 'lucide-react';
 
 interface StateExplorerTabProps {
@@ -28,6 +30,7 @@ export const StateExplorerTab: React.FC<StateExplorerTabProps> = ({
   const [loading, setLoading] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [estimatorBalance, setEstimatorBalance] = useState<string>('32');
 
   const [accountData, setAccountData] = useState<{
     balanceWei: string;
@@ -216,14 +219,29 @@ export const StateExplorerTab: React.FC<StateExplorerTabProps> = ({
             {accountData && (
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-3.5 bg-slate-950 rounded-lg border border-slate-800">
-                    <div className="text-[11px] text-slate-400">ETH Balance</div>
-                    <div className="text-lg font-bold font-mono text-emerald-400 mt-1 truncate">
-                      {accountData.balanceEth}
+                  <div className="p-3.5 bg-slate-950 rounded-lg border border-slate-800 flex flex-col justify-between">
+                    <div>
+                      <div className="text-[11px] text-slate-400">ETH Balance</div>
+                      <div className="text-lg font-bold font-mono text-emerald-400 mt-1 truncate">
+                        {accountData.balanceEth}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
+                        {accountData.balanceWei} wei
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
-                      {accountData.balanceWei} wei
-                    </div>
+                    <button
+                      onClick={() => {
+                        const cleanEth = parseFloat(accountData.balanceEth) > 0 ? accountData.balanceEth : '32';
+                        setEstimatorBalance(cleanEth);
+                        const el = document.getElementById('staking-estimator-section');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="mt-2 text-[10px] text-emerald-400 hover:text-emerald-300 font-mono flex items-center gap-1 transition-colors pt-1 border-t border-slate-800/60"
+                      title="Simulate staking yield with this balance"
+                    >
+                      <TrendingUp className="w-3 h-3" />
+                      <span>Estimate Staking Yield →</span>
+                    </button>
                   </div>
 
                   <div className="p-3.5 bg-slate-950 rounded-lg border border-slate-800">
@@ -366,6 +384,14 @@ export const StateExplorerTab: React.FC<StateExplorerTabProps> = ({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Staking Reward & Compounding Estimator */}
+      <div id="staking-estimator-section">
+        <StakingRewardEstimator
+          currentBaseFeeGwei={liveBaseFeeGwei}
+          initialEthBalance={estimatorBalance}
+        />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { ValidatorHealthCard } from './ValidatorHealthCard';
 import { Eip1559FeeEstimatorCard } from './Eip1559FeeEstimatorCard';
 import { Eip1559GasBurnCard } from './Eip1559GasBurnCard';
 import { GasEfficiencyLeaderboardCard } from './GasEfficiencyLeaderboardCard';
+import { WatchedWalletMonitorWidget } from './WatchedWalletMonitorWidget';
 import {
   hexToNumber,
   weiToGwei,
@@ -2621,6 +2622,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       {/* Validator Health & Beacon Attestation Monitor */}
       <ValidatorHealthCard
         latestBlockNum={latestBlockNum}
+      />
+
+      {/* Watched Wallet Monitor Widget */}
+      <WatchedWalletMonitorWidget
+        recentBlocks={recentBlocks}
+        latestBlockNum={latestBlockNum}
+        onSelectTx={onSelectTx}
       />
 
       {/* 3-Column Section: P2P Peer Client Distribution (Radial Bar), Transaction Types Donut Chart, & Block Difficulty Gauge (Semi-Circular Gauge) */}
