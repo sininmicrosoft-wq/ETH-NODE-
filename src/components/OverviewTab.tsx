@@ -4,6 +4,7 @@ import { GlobalPropagationMap } from './GlobalPropagationMap';
 import { SystemLogsCard } from './SystemLogsCard';
 import { DataUsageRingCard } from './DataUsageRingCard';
 import { ValidatorHealthCard } from './ValidatorHealthCard';
+import { Eip1559FeeEstimatorCard } from './Eip1559FeeEstimatorCard';
 import {
   hexToNumber,
   weiToGwei,
@@ -2282,6 +2283,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* EIP-1559 Fee Estimator & Inclusion Wait-Time Predictor */}
+      <Eip1559FeeEstimatorCard
+        currentBaseFee={currentBaseFee}
+        latestBlockNum={latestBlockNum}
+      />
 
       {/* Top 5 Gas-Consuming Transactions (Latest Block) */}
       <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4">
