@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } from '../types/ethereum';
 import { GlobalPropagationMap } from './GlobalPropagationMap';
 import { SystemLogsCard } from './SystemLogsCard';
+import { DataUsageRingCard } from './DataUsageRingCard';
 import {
   hexToNumber,
   weiToGwei,
@@ -3322,6 +3323,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Node Disk Space & Data-Usage Progress Ring */}
+      <DataUsageRingCard
+        metrics={metrics}
+        latestBlockNum={latestBlockNum}
+      />
 
       {/* Peer Connection Types Distribution (Treemap & Stacked/Grouped Bar Chart) */}
       <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4">
