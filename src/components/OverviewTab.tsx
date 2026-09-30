@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } from '../types/ethereum';
 import { GlobalPropagationMap } from './GlobalPropagationMap';
+import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
 import { SystemLogsCard } from './SystemLogsCard';
 import { DataUsageRingCard } from './DataUsageRingCard';
 import { ValidatorHealthCard } from './ValidatorHealthCard';
@@ -3480,6 +3481,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
       {/* D3 Global Node Propagation Map */}
       <GlobalPropagationMap latencyLogs={chartData} hostClientVersion={metrics?.clientVersion} />
+
+      {/* D3 Network Latency Heatmap Grid */}
+      <NetworkLatencyHeatmap
+        peerCount={metrics?.peerCount || 48}
+        clientVersion={metrics?.clientVersion}
+      />
 
       {/* Consecutive Block Time Interval Scatter Plot (Slot sync and missed proposal analysis) */}
       <div className="p-5 bg-slate-900/50 rounded-xl border border-slate-800 space-y-4">
