@@ -3,6 +3,7 @@ import { EthereumBlock, EthereumTransaction, NodeMetrics, TelemetryLatencyLog } 
 import { GlobalPropagationMap } from './GlobalPropagationMap';
 import { NetworkLatencyHeatmap } from './NetworkLatencyHeatmap';
 import { NetworkLatencyTrendChart } from './NetworkLatencyTrendChart';
+import { BlobGasFeesTrendChart } from './BlobGasFeesTrendChart';
 import { SystemLogsCard } from './SystemLogsCard';
 import { DataUsageRingCard } from './DataUsageRingCard';
 import { ValidatorHealthCard } from './ValidatorHealthCard';
@@ -2158,6 +2159,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
         </div>
       </div>
+
+      {/* EIP-4844 Blob Gas Fees Trend Chart (Last 20 Blocks) */}
+      <BlobGasFeesTrendChart
+        recentBlocks={recentBlocks}
+        latestBlockNum={latestBlockNum}
+        onSelectBlock={onSelectBlock}
+      />
 
       {/* EIP-1559 Fee Estimator & Inclusion Wait-Time Predictor */}
       <Eip1559FeeEstimatorCard
